@@ -133,11 +133,14 @@ class CEA():
 		else:
 			raise ValueError('Invalid location, use "chamber," "throat" or "exit"')
 
+		self.isp, self.cstar, _ =  self.ispObj.getFrozen_IvacCstrTc(Pc=self.imperial_pressure, MR=mixture_ratio, eps=expansion_ratio)
+		
+		self.cstar = self.cstar * 0.3048																										# coversion to m/s
 		self.mole_fractions = self.ispObj.get_SpeciesMoleFractions(Pc=self.imperial_pressure, MR=mixture_ratio, eps=expansion_ratio, frozen=0, frozenAtThroat=0, min_fraction=5e-05)
 		self.Cp = self.Cp * 4186.8																												# coversion to J/gk/K
-		self.mu = self.visc * 0.0001																											# coversion to 	Pa*s
-		self.k = self.cond * 418.4e-3																											# convert to W/m/K
-		self.T_static = self.ispObj.get_Tcomb(Pc=self.imperial_pressure, MR=mixture_ratio)*0.555556										        # coversion to 	K		
+		self.mu = self.visc * 0.0001																											# coversion to Pa*s
+		self.k = self.cond * 418.4e-3																											# coversion to W/m/K
+		self.T_static = self.ispObj.get_Tcomb(Pc=self.imperial_pressure, MR=mixture_ratio)*0.555556										        # coversion to K		
 		
 
 
