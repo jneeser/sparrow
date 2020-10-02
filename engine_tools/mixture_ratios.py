@@ -1,12 +1,12 @@
 import numpy as np
 import engine_tools as et
-import thermo
 import rocketcea
-from matplotlib import pyplot as plt
+from rocketcea.cea_obj import CEA_Obj
+import pylab as pl
 
 
 chamber_pressure = 50e5 			# [Pa]
-expansion_ratio = 7.93
+expansion_ratio = 8
 
 
 # CEA input values 
@@ -14,40 +14,30 @@ oxidiser = 'LOX'
 ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[90,10])  # new fule blend for CEA
  
 
-mixture_ratios = np.arange(1, 2, 0.001)
-cstar = np.ndarray(len(mixture_ratios))
-t_static = np.ndarray(len(mixture_ratios))
-isp = np.ndarray(len(mixture_ratios))
 
-for i in range(len(mixture_ratios)):
-	cea = et.CEA(ethanol90, oxidiser, chamber_pressure)
-	cea.metric_cea_output('chamber', mixture_ratios[i], expansion_ratio)
-	cstar[i] = cea.cstar
-	t_static[i] = cea.T_static
-	isp[i] = cea.isp
+from rocketcea.cea_obj import CEA_Obj
 
+pcM = [40e5, 50e5, 60e5]
 
-idx = np.where(cstar == max(cstar))
-print('maximum cstar mixture ratio: ', mixture_ratios[idx])
+ispObj = CEA_Obj(propName='', oxName='LOX', fuelName=ethanol90)
 
+for Pc in pcM:
+	ispArr = []
+	MR = 1.2
+	mrArr = []
+	while MR < 2:
+		ispArr.append(ispObj.get_Isp(Pc=Pc*0.000145038, MR=MR, eps=expansion_ratio))
+		mrArr.append(MR)
+		MR += 0.001
+	pl.plot(mrArr, ispArr, label='Pc=%g Pa'%Pc)
 
-fig, ax1 = plt.subplots()
-
-color = 'tab:red'
-ax1.set_xlabel('Mixture Ratio [-]')
-ax1.set_ylabel('cstar [m/s]', color=color)
-ax1.plot(mixture_ratios, cstar, color=color)
-ax1.tick_params(axis='y', labelcolor=color)
-
-ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-
-color = 'tab:blue'
-ax2.set_ylabel('Static Temperature [K]', color=color)  # we already handled the x-label with ax1
-ax2.plot(mixture_ratios, t_static ,color=color)
-ax2.tick_params(axis='y', labelcolor=color)
-
-fig.tight_layout()  # otherwise the right y-label is slightly clipped
-plt.grid()
-plt.show()
+pl.legend(loc='best')
+pl.grid(True)
+pl.title( ispObj.desc )
+pl.xlabel( 'Mixture Ratio [-]' )
+pl.ylabel( 'Isp [s]' )
+pl.show()
 
 
+idx = np.where(np.array(ispArr) == max(ispArr))[0][0]
+print('maximum Isp mixture ratio: ', mrArr[idx])
