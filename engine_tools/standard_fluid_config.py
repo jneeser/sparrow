@@ -13,7 +13,7 @@ pre_injection_pressure = 1.25*chamber_pressure	# [Pa]
 
 
 # CEA input values 
-OF = 1.629					# actual OF ratio 
+OF = 1.61					# actual OF ratio 
 oxidiser = 'LOX'
 ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[90,10])  # new fule blend for CEA
  
@@ -32,27 +32,30 @@ ox_composition = 'O2'
 cea = et.CEA(ethanol90, oxidiser, chamber_pressure)
 cea.metric_cea_output('chamber', OF, expansion_ratio)
 
-print('gas static temperature: ', cea.T_static, '[K]')
-print('gas dynamic viscosity: ', cea.mu, '[Pa s]')
-print('gas Prandtl number: ', cea.Pr, '[-]')
-print('ratio of specific heats: ', cea.gamma, '[-]')
-print('gas thermal conductivity: ', cea.k, '[W/m/K]')
-#print('gas mole fractions: ', cea.mole_fractions)
+
+
+if __name__ == "__main__":
+	print('gas static temperature: ', cea.T_static, '[K]')
+	print('gas dynamic viscosity: ', cea.mu, '[Pa s]')
+	print('gas Prandtl number: ', cea.Pr, '[-]')
+	print('ratio of specific heats: ', cea.gamma, '[-]')
+	print('gas thermal conductivity: ', cea.k, '[W/m/K]')
+	#print('gas mole fractions: ', cea.mole_fractions)
 
 
 
-# liquid properties
-liquid_fuel = thermo.Mixture(fuel_composition, ws = fuel_mass_fraction, T=fuel_temperature, P=pre_injection_pressure)
-liquid_ox = thermo.Chemical(ox_composition, T=ox_temperature, P=pre_injection_pressure)
+	# liquid properties
+	liquid_fuel = thermo.Mixture(fuel_composition, ws = fuel_mass_fraction, T=fuel_temperature, P=pre_injection_pressure)
+	liquid_ox = thermo.Chemical(ox_composition, T=ox_temperature, P=pre_injection_pressure)
 
-print('fuel density: ', liquid_fuel.rho, '[kg/m^3]')
-print('fuel dynamic visconsity', liquid_fuel.mu, '[Pa s]')
-print('fuel specific heat at constant pressure: ', liquid_fuel.Cpl, '[J/kg/K]')
-print('fuel thermal conductivity: ', liquid_fuel.k, '[W/m/K]')
+	print('fuel density: ', liquid_fuel.rho, '[kg/m^3]')
+	print('fuel dynamic visconsity', liquid_fuel.mu, '[Pa s]')
+	print('fuel specific heat at constant pressure: ', liquid_fuel.Cpl, '[J/kg/K]')
+	print('fuel thermal conductivity: ', liquid_fuel.k, '[W/m/K]')
 
-print('oxidiser density: ', liquid_ox.rho, '[kg/m^3]')
-print('oxidiser dynamic visconsity', liquid_ox.mu, '[Pa s]')
-print('oxidiser specific heat at constant pressure: ', liquid_ox.Cpl, '[J/kg/K]')
-print('oxidiser thermal conductivity: ', liquid_ox.k, '[W/m/K]')
+	print('oxidiser density: ', liquid_ox.rho, '[kg/m^3]')
+	print('oxidiser dynamic visconsity', liquid_ox.mu, '[Pa s]')
+	print('oxidiser specific heat at constant pressure: ', liquid_ox.Cpl, '[J/kg/K]')
+	print('oxidiser thermal conductivity: ', liquid_ox.k, '[W/m/K]')
 
 

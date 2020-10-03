@@ -97,8 +97,8 @@ class GasInjector():
 
 
 class AnnularOrifice():
-    def __init__(self, fluid, temperature, pressure, length, pressuredrop, inner_radius, outer_radius):
-        self.fluid = thermo.Chemical(fluid, T=temperature, P=pressure)
+    def __init__(self, fluid, mixture, temperature, pressure, length, pressuredrop, inner_radius, outer_radius):
+        self.fluid = thermo.Mixture(fluid, ws=mixture, T=temperature, P=pressure)
         self.length = length
         self.pressuredrop = pressuredrop
         self.inner_radius = inner_radius
@@ -117,7 +117,7 @@ class AnnularOrifice():
 
 
 class AnnulusInjector():
-    def __init__(self, fluid, temperature, pressure, length, annulusdiameter, massflow, pressuredrop, inletangle):
+    def __init__(self, fluid, mixture, temperature, pressure, length, annulusdiameter, massflow, pressuredrop, inletangle):
         """UNVARIFIED model of annular injectors. Uses turbulent boundary layer theory to determine annular gap (di) and numerical solution to Darcey Weisbach eqaution to determine discharge coefficent 
 
         :param fluid: fluid flowing through annulus
@@ -126,7 +126,7 @@ class AnnulusInjector():
         :param annulusdiameter: mean diameter of annulus
         :param pressuredrop: design pressure drop over injector 
         """        
-        self.fluid = thermo.Chemical(fluid, T=temperature, P=pressure)
+        self.fluid = thermo.Mixture(fluid, ws=mixture, T=temperature, P=pressure)
         self.annulusdiameter = annulusdiameter 
         self.length = length
         self.massflow = massflow
@@ -174,25 +174,6 @@ class AnnulusInjector():
         self.velocity = vel
 
 
-class Pintle():
-    def __init__(self, oxidiser_injector, fuel_injector):
-        self.oxidiser_injector = oxidiser_injector
-        self.fuel_injector = fuel_injector
-        self.oxidiser_injector.injector()                  # compute injector properties 
-        self.fuel_injector.injector()                      # compute injector properties 
-
-    def momentum_ratio(self, oxidiser_angle, fuel_angle, n_oxidiser_holes, n_fuel_holes):
-        axial_momentum = (self.fuel_injector.massflow * self.fuel_injector.velocity * np.sin(fuel_angle) * n_fuel_holes
-                       + self.oxidiser_injector.massflow * self.oxidiser_injector.velocity * np.sin(oxidiser_angle) * n_oxidiser_holes
-        )
-        radial_momentum = (self.fuel_injector.massflow * self.fuel_injector.velocity * np.cos(fuel_angle) * n_fuel_holes
-                       + self.oxidiser_injector.massflow * self.oxidiser_injector.velocity * np.cos(oxidiser_angle) * n_oxidiser_holes
-        )
-
-        self.tmr = radial_momentum/axial_momentum
-        self.efficiency = (-2*self.tmr**2 + 1.4*self.tmr + 92)/100
-
-
 def annulus_verification(inner_radius, outer_radius, fluid, pressure_range, temperature, discharge_coefficient):
 
     volumeflow = []
@@ -237,23 +218,9 @@ if __name__ == '__main__':
     gas_inj.injector()
     #print(gas_inj.mu)
 
-    an_inj = AnnulusInjector('h2o', 288, 26.5e5, 2e-3, 24e-3/2, 0.447, 6.5e5, np.pi/2)
+    an_inj = AnnulusInjector(['h2o'], [1], 288, 26.5e5, 2e-3, 24e-3/2, 0.447, 6.5e5, np.pi/2)
     an_inj.injector()
     #print(an_inj.mu)
     #print(an_inj.diameter*1000)
 
     annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)
-
-    '''
-    pressuredrops = np.arange(3e5, 10e5, 0.1e5)
-    tmr = []
-    for p in pressuredrops:
-        liq_inj = LiquidInjector('o2', 90, 26.5e5, 3e-3, 0.667/n_holes, p)
-        liq_inj.injector()
-        pintle = Pintle(liq_inj, an_inj)
-        pintle.momentum_ratio(0, np.pi/2, n_holes, 1)
-        tmr.append(pintle.tmr)
-
-    plt.plot(tmr, pressuredrops/1e5)
-    plt.show()
-    '''
