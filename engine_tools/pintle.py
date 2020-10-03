@@ -8,22 +8,40 @@ import injectors
 
 
 class Pintle():
-    def __init__(self, oxidiser_injector, fuel_injector):
-        self.oxidiser_injector = oxidiser_injector
-        self.fuel_injector = fuel_injector
-        self.oxidiser_injector.injector()                  # compute injector properties 
-        self.fuel_injector.injector()                      # compute injector properties 
+	def __init__(self, oxidiser_injector, fuel_injector, n_oxidiser_holes):
+		self.oxidiser_injector = oxidiser_injector
+		self.fuel_injector = fuel_injector
+		self.n_oxidiser_holes = n_oxidiser_holes
+		self.oxidiser_injector.injector()                  # compute injector properties 
+		self.fuel_injector.injector()                      # compute injector properties 
 
-    def momentum_ratio(self, oxidiser_angle, fuel_angle, n_oxidiser_holes, n_fuel_holes):
-        axial_momentum = (self.fuel_injector.massflow * self.fuel_injector.velocity * np.sin(fuel_angle) * n_fuel_holes
-                       + self.oxidiser_injector.massflow * self.oxidiser_injector.velocity * np.sin(oxidiser_angle) * n_oxidiser_holes
-        )
-        radial_momentum = (self.fuel_injector.massflow * self.fuel_injector.velocity * np.cos(fuel_angle) * n_fuel_holes
-                       + self.oxidiser_injector.massflow * self.oxidiser_injector.velocity * np.cos(oxidiser_angle) * n_oxidiser_holes
-        )
+	def momentum_ratio(self):
+		axial_momentum = self.fuel_injector.massflow * self.fuel_injector.velocity 
+		
+		radial_momentum = self.oxidiser_injector.massflow * self.oxidiser_injector.velocity * self.n_oxidiser_holes
+	
+		self.tmr = radial_momentum/axial_momentum
+		self.efficiency = (-2*self.tmr**2 + 1.4*self.tmr + 92)/100
 
-        self.tmr = radial_momentum/axial_momentum
-        self.efficiency = (-2*self.tmr**2 + 1.4*self.tmr + 92)/100
+	def iterator(self, tmr_range):
+		'''
+		optimises pressure drops to get within given TMR range
+		Increses pressure from the standard pressure drop 
+		'''
+
+		self.momentum_ratio() 								# initiate first momentum ratio calc
+ 
+		while self.tmr > max(tmr_range) or self.tmr < min(tmr_range): 
+			if self.tmr > max(tmr_range):
+				self.fuel_injector.pressuredrop += 0.005e5
+				self.fuel_injector.injector()
+
+			if self.tmr < min(tmr_range):
+				self.oxidiser_injector.pressuredrop += 0.005e5
+				self.oxidiser_injector.injector()
+
+			self.momentum_ratio()
+
 
 
 pressuredrop = std.pre_injection_pressure - std.chamber_pressure
@@ -46,3 +64,12 @@ an_inj.injector()
 print(an_inj.mu)
 print(an_inj.velocity)
 print(an_inj.diameter*1000)
+
+
+tmr_range = [0.97,1]
+pintle = Pintle(liq_inj, an_inj, n_holes)
+pintle.iterator(tmr_range)
+print(pintle.tmr)
+print(pintle.efficiency)
+print(pintle.oxidiser_injector.pressuredrop/1e6)
+print(pintle.fuel_injector.pressuredrop/1e6)
