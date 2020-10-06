@@ -165,6 +165,8 @@ class Heattransfer():
 		self.expansion_ratio = np.pi*geometry[-1][1]**2/(np.pi*self.throat_diameter**2/4)
 		self.wall_thickness = wall_thickness
 		self.thermal_conductivity = thermal_conductivity
+		self.coolant_species = coolant
+		self.coolant_massfraction = coolant_massfraction
 
 		# get hot gas properties from CEA
 		self.cea = CEA(fuel, oxidiser, self.chamber_pressure)
@@ -214,14 +216,17 @@ class Heattransfer():
 
 		return q_r_co2 + q_r_h2o
 
-	def heat_trans_coeff_coolant(self, hydrolic_diameter, wall_temperature, x_coordinate, y_coordinate):
+	def heat_trans_coeff_coolant(self, hydrolic_diameter, wall_temperature, coolant_wall_temperature, x_coordinate, y_coordinate):
 		coolant_area = hydrolic_diameter / 2 * y_coordinate * 2 * np.pi
 		flowvelocity = self.coolant_massflow/(self.coolant.rho * coolant_area)
 		Pr = self.coolant.Pr
 		Re = self.coolant.rho*flowvelocity*hydrolic_diameter/self.coolant.mu
 		k = self.coolant.Cp*self.coolant.mu/Pr
 
-		Nu = 0.023*Re**0.8*Pr**0.4#*(self.coolant.T/wall_temperature) ** (0.57 - 1.59*hydrolic_diameter/x_coordinate)
+		wall_fluid = thermo.Mixture(self.coolant_species, ws=self.coolant_massfraction, P=self.coolant.P, T=coolant_wall_temperature)
+		
+		#Nu = 0.023*Re**0.8*Pr**0.4#*(self.coolant.T/coolant_wall_temperature) ** (0.57 - 1.59*hydrolic_diameter/x_coordinate)
+		Nu = 0.0208*Re**0.8*Pr**0.4*(1+0.01457*wall_fluid.mu/self.coolant.mu)  #Hess & Kunz relationship
 		halpha = Nu*k/hydrolic_diameter
 
 		#G = self.coolant_massflow/coolant_area
@@ -231,29 +236,35 @@ class Heattransfer():
 
 	def iterator(self, y_coordinate, x_coordinate, hydrolic_diameter, section_lenght, initial_guess, mach, adiabatic_wall_temperature ,max_iter=1000, tol=1e-6):
 		wall_temperature = 300
+		coolant_wall_temperature = 300
 		iteration = 0
-		difference = 1
+		difference_wall = 1
+		difference_coolant = 1
 
-		while difference > tol:
+		while difference_wall > tol and difference_coolant > tol:
 			halpha = self.heat_trans_coeff_gas(mach, wall_temperature, y_coordinate)
-			halpha_c, Re, Nu = self.heat_trans_coeff_coolant(hydrolic_diameter, wall_temperature, x_coordinate, y_coordinate)
+			halpha_c, Re, Nu = self.heat_trans_coeff_coolant(hydrolic_diameter, wall_temperature, coolant_wall_temperature, x_coordinate, y_coordinate)
 			radiation = self.radiation(y_coordinate, mach)
 
 			heat_flux = (adiabatic_wall_temperature - self.coolant.T + radiation/halpha) / (1/halpha + self.wall_thickness/self.thermal_conductivity + 1/halpha_c)
 			new_wall_temp = - ((heat_flux - radiation)/halpha - adiabatic_wall_temperature)
+			new_coolant_wall_temp = heat_flux/halpha_c + self.coolant.T
 
-			difference = abs(new_wall_temp - wall_temperature)
+			difference_wall = abs(new_wall_temp - wall_temperature)
+			difference_coolant = abs(new_coolant_wall_temp - coolant_wall_temperature)
+
 			iteration += 1
 			if iteration > max_iter:
 				raise ValueError('Non-convergence, iteration number exceeded ', max_iter)
 
 			wall_temperature = new_wall_temp
+			coolant_wall_temperature = new_coolant_wall_temp
 
 		T_new = self.coolant.T + heat_flux*2*np.pi*y_coordinate*section_lenght / (self.coolant_massflow*self.coolant.Cp) 
 		dp = self.pressure_drop(0, hydrolic_diameter, section_lenght, y_coordinate)
 		self.coolant.calculate(P=self.coolant.P-dp, T=T_new)
 
-		return heat_flux, wall_temperature, Re, Nu, radiation
+		return heat_flux, wall_temperature, Re, Nu, radiation, halpha
 
 	def heatflux(self, hydrolic_diameter, geometry, max_temperature=0, optimise=False):
 		"""determines heat flux along the entire geometry starting from the nozzle end. Calls iterator function for all grid points. Only use for engine with radial cooling jacket. Can optimise cooling flow hydrolic diameter for a maximum wall temperature 
@@ -297,6 +308,7 @@ class Heattransfer():
 		self.optimised_hydrolic_diameter = hydrolic_diameter
 		self.T_chamber = np.ndarray(len(y))
 		self.P_chamber = np.ndarray(len(y))
+		self.halpha_gas = np.ndarray(len(y))
 
 
 		# initial guess for mach-area relation
@@ -325,13 +337,13 @@ class Heattransfer():
 			self.P_chamber[i] = local.pressure(mach)
 			self.T_chamber[i] = local.temperature(mach)
 		
-			q, wall_temp, Re, Nu, radiation = self.iterator(y[i], x[i], hydrolic_diameter[i], section_length, initial_guess[i], mach, adiabatic_wall_temperature)
+			q, wall_temp, Re, Nu, radiation, halpha = self.iterator(y[i], x[i], hydrolic_diameter[i], section_length, initial_guess[i], mach, adiabatic_wall_temperature)
 
 			# if optimise = True optimise cooling jacket geometry
 			if optimise and y[i] < self.chamber_diameter:
 				while wall_temp > max_temperature:
 					hydrolic_diameter[i] -= 0.05e-3
-					q, wall_temp, Re, Nu, radiation = self.iterator(y[i], x[i], hydrolic_diameter[i], section_length, initial_guess[i], mach, adiabatic_wall_temperature)
+					q, wall_temp, Re, Nu, radiation, halpha = self.iterator(y[i], x[i], hydrolic_diameter[i], section_length, initial_guess[i], mach, adiabatic_wall_temperature)
 			
 			self.q[i] = q  
 			self.q_rad[i] = radiation
@@ -341,6 +353,7 @@ class Heattransfer():
 			self.coolant_Re[i] = Re
 			self.coolant_Nu[i] = Nu
 			self.optimised_hydrolic_diameter = hydrolic_diameter
+			self.halpha_gas[i] = halpha
 		
 
 
