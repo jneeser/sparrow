@@ -197,7 +197,7 @@ def annulus_verification(inner_radius, outer_radius, fluid, pressure_range, temp
 
     plt.plot(experimental_volumeflow(pressure_range), pressure_range/1e5, color = 'red', label = 'experimental volumeflow')
     plt.plot(volumeflow, pressure_range/1e5, color = 'blue', label = 'calculated volumeflow')
-    plt.loglog()
+    #plt.loglog()
     plt.grid()
     plt.xlabel('volume flow [l/min]')
     plt.ylabel('pressure drop [bar]')

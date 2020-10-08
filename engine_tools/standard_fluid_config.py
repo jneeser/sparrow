@@ -13,7 +13,7 @@ pre_injection_pressure = 1.25*chamber_pressure	# [Pa]
 
 
 # CEA input values 
-OF = 1.61					# actual OF ratio 
+OF = 1.61					
 oxidiser = 'LOX'
 ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[90,10])  # new fule blend for CEA
  
@@ -57,5 +57,4 @@ if __name__ == "__main__":
 	print('oxidiser dynamic visconsity', liquid_ox.mu, '[Pa s]')
 	print('oxidiser specific heat at constant pressure: ', liquid_ox.Cpl, '[J/kg/K]')
 	print('oxidiser thermal conductivity: ', liquid_ox.k, '[W/m/K]')
-
 

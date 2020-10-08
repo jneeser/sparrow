@@ -248,7 +248,7 @@ class Heattransfer():
 
 			heat_flux = (adiabatic_wall_temperature - self.coolant.T + radiation/halpha) / (1/halpha + self.wall_thickness/self.thermal_conductivity + 1/halpha_c)
 			new_wall_temp = - ((heat_flux - radiation)/halpha - adiabatic_wall_temperature)
-			new_coolant_wall_temp = heat_flux/halpha_c + self.coolant.T
+			new_coolant_wall_temp = -heat_flux*self.wall_thickness/self.thermal_conductivity + new_wall_temp
 
 			difference_wall = abs(new_wall_temp - wall_temperature)
 			difference_coolant = abs(new_coolant_wall_temp - coolant_wall_temperature)
