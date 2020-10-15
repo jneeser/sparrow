@@ -117,8 +117,8 @@ class AnnularOrifice():
 
 
 class AnnulusInjector():
-    def __init__(self, fluid, mixture, temperature, pressure, length, annulusdiameter, massflow, pressuredrop, inletangle):
-        """UNVARIFIED model of annular injectors. Uses turbulent boundary layer theory to determine annular gap (di) and numerical solution to Darcey Weisbach eqaution to determine discharge coefficent 
+    def __init__(self, fluid, mixture, temperature, pressure, length, annulusdiameter, massflow, pressuredrop):
+        """UNVARIFIED model of annular injectors. Uses numerical solution to Darcey Weisbach eqaution to determine discharge coefficent with cryo test data 
 
         :param fluid: fluid flowing through annulus
         :type fluid: string
@@ -131,7 +131,6 @@ class AnnulusInjector():
         self.length = length
         self.massflow = massflow
         self.pressuredrop = pressuredrop
-        self.inletangle = inletangle
 
     def friction(self, Re, di):
         # solving Darcey Weisbach equation
@@ -141,7 +140,7 @@ class AnnulusInjector():
 
     def xiinlet(self):
         #return 0.5 + 1.2/np.pi*self.inletangle             # min 0.5 for coaxial flow before injection, max 0.9 for flow at pi/6 rad realtive to faceplate 
-        return 1.56                                          # fit from cryo test data 
+        return 1.359                                        # fit from cryo test data 
 
     def injector(self, maxiter=100, tol=1e-6):
         it = 0 
@@ -149,13 +148,12 @@ class AnnulusInjector():
         mu = 1/np.sqrt(1+self.xiinlet())                               
         di = 1e-3
         while difference > tol:
-            D = self.annulusdiameter + di/2
+            D = self.annulusdiameter + di
 
             vel = mu*np.sqrt(2*self.pressuredrop/self.fluid.rho)
             Re = self.fluid.rho*vel*di/self.fluid.mu
 
-            deltamax = 0*0.37*0.4*di/(Re**0.2)                # max thickness of turbulent boundary layer at 0.4 * annulus gap thickness
-            di = self.massflow/(self.fluid.rho*np.pi*D*vel) + 1/8*deltamax
+            di = self.massflow/(self.fluid.rho*np.pi*D*vel)
 
             xifriction = self.friction(Re, di)*self.length/di
             xiinlet = self.xiinlet()
@@ -175,26 +173,29 @@ class AnnulusInjector():
 
 
 def annulus_verification(inner_radius, outer_radius, fluid, pressure_range, temperature, discharge_coefficient):
-
     volumeflow = []
     D = 2*((outer_radius - inner_radius)/2 + inner_radius)
     di = outer_radius - inner_radius
     for p in pressure_range:
         liquid = thermo.Chemical(fluid, T=temperature, P=p)
         vel = discharge_coefficient*np.sqrt(2*p/liquid.rho)
-        Re = liquid.rho*vel*di/liquid.mu
-        deltamax = 0.37*0.4*di/(Re**0.2) 
 
-        q = 2*np.pi*D*vel*(di/2 - 1/8*deltamax)
+        q = 2*np.pi*D*vel*(di/2)
         q *= 60/0.001                               # conversion to l/min
 
         volumeflow.append(q)
+    volumeflow = np.array(volumeflow)
+        
 
     def experimental_volumeflow(pressuredrop):
         deltap = pressuredrop/1e5
         q_exp = (deltap/0.0012)**(1/2.1171)         # cryo test data in l/min
         return q_exp
 
+    exp_volumeflow = experimental_volumeflow(pressure_range)
+    error = np.dot((exp_volumeflow-volumeflow), (exp_volumeflow-volumeflow))/np.dot(exp_volumeflow,exp_volumeflow)
+    print('error: ', abs(error))
+    
     plt.plot(experimental_volumeflow(pressure_range), pressure_range/1e5, color = 'red', label = 'experimental volumeflow')
     plt.plot(volumeflow, pressure_range/1e5, color = 'blue', label = 'calculated volumeflow')
     #plt.loglog()
@@ -203,7 +204,7 @@ def annulus_verification(inner_radius, outer_radius, fluid, pressure_range, temp
     plt.ylabel('pressure drop [bar]')
     plt.legend(loc='best')
     plt.show()
-
+    
 
 if __name__ == '__main__':
 
@@ -211,16 +212,16 @@ if __name__ == '__main__':
 
     liq_inj = LiquidInjector(['h2o2', 'h2o'], [0.9,0.1], 288, 26.5e5, 3.46e-3, 0.163/n_holes, 6.5e5, np.pi/6)
     liq_inj.injector()
-    print(liq_inj.mu)
-    print(liq_inj.diameter*1000)
+    #print(liq_inj.mu)
+    #print(liq_inj.diameter*1000)
 
     gas_inj = GasInjector('o2', 288, 26e5, 4e-3, 0.163/4, 6e5, 20e-3, np.pi/2)
     gas_inj.injector()
     #print(gas_inj.mu)
 
-    an_inj = AnnulusInjector(['h2o'], [1], 288, 26.5e5, 2e-3, 24e-3/2, 0.447, 6.5e5, np.pi/2)
+    an_inj = AnnulusInjector(['h2o'], [1], 288, 29e5, 2e-3, 24e-3, 0.447, 9e5)
     an_inj.injector()
-    #print(an_inj.mu)
-    #print(an_inj.diameter*1000)
+    print(an_inj.mu)
+    print(an_inj.diameter*1000)
 
-    annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)
+    #annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)

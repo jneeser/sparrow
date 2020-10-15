@@ -4,13 +4,16 @@ import thermo
 import rocketcea
 
 
+#chamber parameters
 chamber_pressure = 50e5 			# [Pa]
 fuel_inlet_pressure = 70e5			# [Pa]
 fuel_temperature = 288				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 7.93
 pre_injection_pressure = 1.25*chamber_pressure	# [Pa]
-
+fuel_injection_temperature = 450 	# [K]
+chamber_diameter = 130e-3			# [m]
+throat_diameter = 49.72e-3			# [m]
 
 # CEA input values 
 OF = 1.61					
@@ -25,6 +28,7 @@ ox_massflow = total_massflow - fuel_massflow
 fuel_composition = ['C2H5OH', 'H2O']
 fuel_mass_fraction = [0.9, 0.1]
 ox_composition = 'O2'
+print(fuel_massflow)
 
 
 # Hot gas properties
