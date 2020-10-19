@@ -8,7 +8,9 @@ import csv
 
 geometry = np.genfromtxt('sparrow_contour_1_5.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
 wall_thickness = np.ones(len(geometry[:,1]))*0.4e-3
+wall_thickness_tbc = 0.1e-3
 thermal_conductivity = 28							# Inconel at 800 C
+thermal_conductivity_tbc = 2
 channel_hydrolic_diameter = np.ones(len(geometry[:,1]))*1.5e-3
 number_of_channels = 60
 
@@ -35,7 +37,7 @@ fuel_composition = ['C2H5OH']
 fuel_mass_fraction = [1]
 
 
-heat = et.Heattransfer(fuel_composition, fuel_mass_fraction, fuel_massflow, total_massflow, ethanol90, oxidiser, OF, chamber_pressure, fuel_temperature, fuel_inlet_pressure, geometry, number_of_channels, thermal_conductivity)
+heat = et.Heattransfer(fuel_composition, fuel_mass_fraction, fuel_massflow, total_massflow, ethanol90, oxidiser, OF, chamber_pressure, fuel_temperature, fuel_inlet_pressure, geometry, number_of_channels, thermal_conductivity, thermal_conductivity_tbc, wall_thickness_tbc)
 #heat = et.Heattransfer(['CH4'], [1], 1.32, 5.5, 'CH4', 'LOX', 3.16, 40e5, 110, 60e5, geometry, wall_thickness, thermal_conductivity)
 
 heat.heatflux(channel_hydrolic_diameter, geometry, wall_thickness, 1250, False)
@@ -53,7 +55,7 @@ axes[2].set_ylabel('heat flux [MW/m^2]')
 axes[3].plot(geometry[:,0][::-1], heat.coolant_pressure)
 axes[3].set_ylabel('coolant pressure [MPa]')
 
-axes[4].plot(geometry[:,0][::-1], heat.coolant_temp)
+axes[4].plot(geometry[:,0][::-1], heat.tbc_wall_temp)
 axes[4].set_ylabel('coolant temperature [K]')
 
 plt.xlabel('x coordiante [m]')
