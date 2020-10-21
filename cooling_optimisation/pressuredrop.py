@@ -4,9 +4,9 @@ import scipy.optimize
 from scipy import interpolate
 import time
 
-
+# TODO un-hardcoade TBC heat flux params
 mdt = 2.21 #kg/s
-k= 6e-6 #guess
+k = 6e-6 #guess
 ki = 0.167
 
 def f(D,Rev,implicit=True):
@@ -70,7 +70,8 @@ class metal:
         self.sig_yield = interpolate.interp1d(sig_yield[1],sig_yield[0],fill_value='extrapolate')
 
 class sim:
-    def __init__(self,T_wall,T_cool,h_cha,q_rad,p_cool,p_cha,pd,SF=1.5):
+    def __init__(self, max_wall_temp, T_wall,T_cool,h_cha,q_rad,p_cool,p_cha,y_coordinate,SF=1.5):
+        self.max_wall_temp = max_wall_temp
         self.T_wall = T_wall
         self.T_cool = T_cool
         self.h_cha = h_cha
@@ -78,7 +79,7 @@ class sim:
         self.p_cool = p_cool
         self.p_cha = p_cha
         self.SF = SF
-        self.pd_con = 40e5/0.4
+        self.pd_con = 200000/(y_coordinate)
 
 
 class physics:
@@ -120,17 +121,19 @@ class physics:
             #print(input)
             geom_update(input)
             flow_update()
+            self.t_tbc = 0.15e-3
+            self.k_tbc = 2
             self.Pr = self.fluid.Pr
             self.hi = ki/self.dhi*0.023*self.Rei**0.8*self.Pr**0.4
             self.ho =  ki/self.dhi*0.023*self.Reo**0.8*self.Pr**0.4
-            self.q = (self.sim.T_wall - self.sim.T_cool + self.sim.q_rad/self.sim.h_cha) / (1/self.sim.h_cha + self.par.wt1/self.met.k + 1/self.hi)
+            self.q = (self.sim.T_wall - self.sim.T_cool + self.sim.q_rad/self.sim.h_cha) / (1/self.sim.h_cha + self.par.wt1/self.met.k + 1/self.hi + self.t_tbc/self.k_tbc)
             Li =  np.linalg.norm(self.channeli.pointclasslist[2][0]-self.channeli.pointclasslist[3][0])
 
             temp_sigma_steady1 = self.met.E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li*3/(4*self.par.wt1**2)
             temp_sigma_steady2 = self.met.E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li/(4*self.par.wt1**2)
             temp_sigma_start = (self.sim.p_cool)*Li*Li/(4*self.par.wt1**2)
 
-            self.max_temp = self.sim.T_wall - self.q/self.sim.h_cha
+            self.max_temp = self.sim.max_wall_temp
 
             self.sigma = np.max(np.abs(np.array([temp_sigma_steady1,temp_sigma_steady2,temp_sigma_start])))
             if self.sigma == temp_sigma_start:
@@ -169,7 +172,8 @@ class physics:
         cons = ({'type': 'ineq', 'fun': stress_constraint},
                 {'type': 'ineq', 'fun': pressure_drop_constraint})
         x0 = np.array([self.par.t,self.par.wt1,self.par.rf1i,self.par.rf1o,self.par.rf2])
-        bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.4e-3,6e-3),(0.1e-3,4e-3),(0.15e-3,0.6e-3))
+        #bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.1e-3,2e-3),(0.1e-3,2e-3),(0.15e-3,0.6e-3))
+        bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.4e-3,4e-3),(0.1e-3,4e-3),(0.15e-3,0.6e-3))
         
         if pressure_drop_constraint(x0) > 0 and stress_constraint(x0) > 0:
             self.record_cross.append(mass_optimize(x0))

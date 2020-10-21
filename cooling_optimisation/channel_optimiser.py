@@ -16,12 +16,12 @@ import time
 fuel_composition = ['C2H5OH']
 fuel_mass_fraction = [1]
 number_of_channels = 42*2
-wall_thickness_tbc = 0.1e-3
-thermal_conductivity = 28							# Inconel at 800 C
+wall_thickness_tbc = 0.15e-3
+thermal_conductivity = 24							# Inconel at 800 C
 thermal_conductivity_tbc = 2
 
 # create initial objects 
-geometry = np.genfromtxt('sparrow_contour_coarse.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
+geometry = np.genfromtxt('sparrow_contour_1_5.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
 isnetropic = heatflux.Isentropic(std.chamber_pressure, std.cea.T_static, std.cea.gamma)
 mach = isnetropic.mach(geometry)
 t_aw = isnetropic.adiabatic_wall_temp(mach, geometry, std.cea.Pr)
@@ -55,6 +55,7 @@ rf1o_arr = np.ndarray(len(y_coordinates))
 rf2_arr = np.ndarray(len(y_coordinates))
 wto_arr = np.ndarray(len(y_coordinates))
 t_arr = np.ndarray(len(y_coordinates))
+stress_ratio_arr = np.ndarray(len(y_coordinates))
 
 # empty arrays for heatflux outputs 
 wall_t_arr = np.ndarray(len(y_coordinates))
@@ -66,7 +67,7 @@ halpha_gas_arr = np.ndarray(len(y_coordinates))
 sec_length_arr = np.ndarray(len(y_coordinates))
 
 # material 
-in718 = pressuredrop.metal(E=200e9,k=20,v=0.33,alpha=12e-6,sig_yield=([1150e6,1150e6,950e6,650e6],[273,50+273,700+273,850+273]))
+in718 = pressuredrop.metal(E=200e9,k=thermal_conductivity,v=0.33,alpha=12e-6,sig_yield=([1150e6,1150e6,950e6,650e6,0],[273,50+273,700+273,850+273,1260+273]))
 
 
 #TODO implement pressure drops 
@@ -97,7 +98,7 @@ for i in range(len(y_coordinates)):
 
 	while difference > tol:
 		initial_params = pressuredrop.parameters(ri=y_coordinates[i],t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=int(number_of_channels/2))
-		initial_heat = pressuredrop.sim(t_aw[i], heat.coolant.T,halpha,radiation,coolant_pressure,std.chamber_pressure,0)
+		initial_heat = pressuredrop.sim(wall_temperature, t_aw[i], heat.coolant.T, halpha, radiation, coolant_pressure,std.chamber_pressure, y_coordinates[i])
 		try:
 			new_params = pressuredrop.physics(initial_params,in718,initial_heat,heat.coolant)
 		except:
@@ -147,6 +148,7 @@ for i in range(len(y_coordinates)):
 	rf2_arr[i] = new_params.par.rf2
 	wto_arr[i] = new_params.wto
 	t_arr[i] = new_params.par.t
+	stress_ratio_arr[i] = new_params.sigma_rat
 
 	# empty arrays for heatflux outputs 
 	wall_t_arr[i] = wall_temperature
@@ -159,31 +161,15 @@ for i in range(len(y_coordinates)):
 t2 = time.time()
 print('optimisation runtime: ', t2-t1, '[s]')
 
-f, axes = plt.subplots(4, 1)
-axes[0].plot(geometry[:,0], geometry[:,1]*1000)
-axes[0].set_ylabel('contour height [mm]')
-
-axes[1].plot(geometry[:,0][::-1], wall_t_arr)
-axes[1].set_ylabel('wall temperature [K]')
-
-axes[2].plot(geometry[:,0][::-1], q_total_arr/1e6)
-axes[2].set_ylabel('heat flux [MW/m^2]')
-
-axes[3].plot(geometry[:,0][::-1], dp_arr)
-axes[3].set_ylabel('coolant pressure [MPa]')
-
-plt.xlabel('x coordiante [m]')
-plt.show()
-
 
 with open('optimised_geometry.csv', 'w', newline='') as file:
 	writer = csv.writer(file)
 	writer.writerow(["x coordinate","y_coordinate","gas heat transfer coefficient", "heat flux", "max wall temperature", "Re inner", "Re outer", "pressure drops", "section lenghts","hydrolic diameter inner",
-					 "hydrolic diameter outer", "wt1", "wto", "rf1 inner", "rf1 outer", "rf2", "inner wall thickness", "hi", "ho"]
+					 "hydrolic diameter outer", "wt1", "wto", "rf1 inner", "rf1 outer", "rf2", "inner wall thickness", "hi", "ho", "stress ratios"]
 	)
 	for i in range(len(geometry[:,1])):
 		idx = len(geometry[:,1]) - i - 1
 		writer.writerow([geometry[i,0], geometry[i,1], halpha_gas_arr[idx], q_total_arr[idx], wall_t_arr[idx], Rei_arr[idx], Reo_arr[idx], dp_arr[idx], sec_length_arr[idx], dhi_arr[idx],
-						dho_arr[idx], wt1_arr[idx], wto_arr[idx], rf1i_arr[idx], rf1o_arr[idx], rf2_arr[idx], t_arr[idx], hi_arr[idx], ho_arr[idx]
+						dho_arr[idx], wt1_arr[idx], wto_arr[idx], rf1i_arr[idx], rf1o_arr[idx], rf2_arr[idx], t_arr[idx], hi_arr[idx], ho_arr[idx], stress_ratio_arr[idx]
 		])
 
