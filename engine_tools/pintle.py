@@ -10,7 +10,6 @@ import injectors
 class Pintle():
 	def __init__(self, oxidiser_injector, fuel_injector, n_oxidiser_holes):
 		"""Tool for sizing pintle injector uisng a pintle tip with discrete orifices and oxidiser centric injection
-
 		:param oxidiser_injector: Oxidiser injector object 
 		:param fuel_injector: Fuel injector object
 		:param n_oxidiser_holes: number of orifices in the pintle tip
@@ -22,19 +21,23 @@ class Pintle():
 		self.fuel_injector.injector()                      # compute injector properties 
 
 	def momentum_ratio(self):
-		axial_momentum = self.fuel_injector.massflow * self.fuel_injector.velocity 
-		
 		radial_momentum = self.oxidiser_injector.massflow * self.oxidiser_injector.velocity * self.n_oxidiser_holes
-	
+		axial_momentum = self.fuel_injector.massflow * self.fuel_injector.velocity 
 		self.tmr = radial_momentum/axial_momentum
-		self.efficiency = (-2*self.tmr**2 + 1.4*self.tmr + 92)/100
+
+		radial_local_area = np.pi * self.oxidiser_injector.diameter**2/4
+		axial_local_area = self.fuel_injector.diameter*self.oxidiser_injector.diameter	
+		self.lmr = self.oxidiser_injector.fluid.rho*self.oxidiser_injector.velocity**2*radial_local_area / (self.fuel_injector.fluid.rho*self.fuel_injector.velocity**2*axial_local_area)
+ 		
+		alpha = 0.7
+		beta = 2.0
+		self.spray_angle = alpha * np.arctan(beta * self.lmr)
 
 	def iterator(self, tmr_range):
-		'''
+		"""
 		optimises pressure drops to get within given TMR range
-		Increses pressure from the standard pressure drop 
-		'''
-
+		Increses pressure from the standard pressure drop value
+		"""
 		self.momentum_ratio() 								# initiate first momentum ratio calc
  
 		while self.tmr > max(tmr_range) or self.tmr < min(tmr_range): 
@@ -108,10 +111,9 @@ class IjectorThermal():
 
 		return q_r_co2 + q_r_h2o
 
-	def heat_trans_coeff_coolant(self, wall_temperature):
-		flowvelocity = self.fluid_massflow/(self.fluid.rho * np.pi*(self.hydrolic_diameter/2)**2)
+	def heat_trans_coeff_coolant(self, wall_temperature, flowvelocity):
 		Pr = self.fluid.Pr
-		Re = self.fluid.rho*flowvelocity*hydrolic_diameter/self.fluid.mu
+		Re = self.fluid.rho*flowvelocity*self.hydrolic_diameter/self.fluid.mu
 		k = self.fluid.Cp*self.fluid.mu/Pr
 		
 		Nu = 0.023*Re**0.8*Pr**0.4
@@ -119,7 +121,7 @@ class IjectorThermal():
 
 		return halpha, Re, Nu
 
-	def wall_temperature(self, max_iter=1000, tol=1e-6):
+	def wall_temperature(self, flowvelocity, max_iter=1000, tol=1e-6):
 		wall_temperature = 300
 		iteration = 0
 		difference_wall = 1
@@ -131,7 +133,7 @@ class IjectorThermal():
 
 		while difference_wall > tol:
 			halpha = self.heat_trans_coeff_gas(mach, wall_temperature)
-			halpha_c, Re, Nu = self.heat_trans_coeff_coolant(wall_temperature)
+			halpha_c, Re, Nu = self.heat_trans_coeff_coolant(wall_temperature, flowvelocity)
 			radiation = self.radiation(mach)
 
 			heat_flux = (adiabatic_wall_temperature - self.fluid.T + radiation/halpha) / (1/halpha + self.max_wall_thickness/self.thermal_conductivity + 1/halpha_c)
@@ -151,42 +153,78 @@ class IjectorThermal():
 
 #Injector Parameters 
 pressuredrop = std.pre_injection_pressure - std.chamber_pressure 		# [Pa]
-fuel_inlet_angle = np.pi/2
-n_holes = 30
+inlet_angle = np.pi/2
 
+n_holes = 36
 l_hole = 2.75e-3							# [m]
 annulus_length = 2e-3 						# [m]
 d_pintle = 30e-3							# [m]
 
-liq_inj = injectors.LiquidInjector(['O2'], [1], std.ox_temperature, std.pre_injection_pressure, l_hole, std.ox_massflow/n_holes, pressuredrop, fuel_inlet_angle)
-an_inj = injectors.AnnulusInjector(std.fuel_composition, std.fuel_mass_fraction, std.fuel_injection_temperature, std.pre_injection_pressure, annulus_length,d_pintle, std.ox_massflow, pressuredrop)
+liq_inj = injectors.LiquidInjector(['o2'], [1], std.ox_temperature, std.pre_injection_pressure, l_hole, std.ox_massflow/n_holes, pressuredrop, inlet_angle)
+an_inj = injectors.AnnulusInjector(['c2h5oh', 'h2o'], [0.9,0.1], std.fuel_injection_temperature, std.pre_injection_pressure, annulus_length, d_pintle, std.fuel_massflow, pressuredrop)
 
 
-# Pintle optimisation
-tmr_range = [0.97,1]
+# Pintle optimisation 
+tmr_range = [0.9,1.1]
 pintle = Pintle(liq_inj, an_inj, n_holes)
 pintle.iterator(tmr_range)
 print('pintle injector TMR:', pintle.tmr)
+print('pintle injector spray cone half angle:', np.degrees(pintle.spray_angle))
 print('oxidiser pressure drop: ', pintle.oxidiser_injector.pressuredrop/1e6, '[MPa]')
 print('fuel pressure drop: ',pintle.fuel_injector.pressuredrop/1e6, '[MPa]')
 print('oxidiser hole diameter:', pintle.oxidiser_injector.diameter*1000, '[mm]')
 print('annulus width:', pintle.fuel_injector.diameter*1000, '[mm]')
 
 
-# Injeector Thermals
+# Pintle Tip Thermals
 thermal_conductivity_copper = 343			# [W/m/K]
+wall_thickness = 3e-3						# [m]
+velocity = 100								# [m/s]
+hydrolic_diameter = 24.5e-3/2				# [m]
+flowvelocity = std.ox_massflow/(std.liquid_ox.rho * np.pi*(hydrolic_diameter/2)**2)
+
+pintle_thermal = IjectorThermal(thermal_conductivity_copper, wall_thickness, std.ox_temperature, std.pre_injection_pressure, std.ox_massflow, std.ox_composition, [1], hydrolic_diameter, std.total_massflow, std.chamber_pressure, velocity)
+pintle_thermal.wall_temperature(flowvelocity)
+print('maximum pintle tip temperature: ', pintle_thermal.max_wall_temperature, 'K')
+
+
+#Faceplate Thermals 
 thermal_conductivity_stainless = 27			# [W/m/K]
 wall_thickness = 3e-3						# [m]
 velocity = 100								# [m/s]
-hydrolic_diameter = 12.25e-3				# [m]
-manifold_hydrolic_diameter = 15e-3			# [m]
 gas_temperature = 2674						# [K]
 
-pintle_thermal = IjectorThermal(thermal_conductivity_copper, wall_thickness, std.ox_temperature, std.pre_injection_pressure, std.ox_massflow, std.ox_composition, [1], hydrolic_diameter, std.total_massflow, std.chamber_pressure, velocity)
-pintle_thermal.wall_temperature()
-print('maximum pintle tip temperature: ', pintle_thermal.max_wall_temperature, 'K')
+chamber_radi = np.linspace(16e-3, 65e-3, 100)
+flow_height = 3e-3							# [m]
+width = 2*np.pi*chamber_radi
+areas = width*flow_height
+flow_velocity = std.fuel_massflow / std.liquid_fuel.rho / areas
+hydrolic_diameter = 2*flow_height*areas / (areas + flow_height)
 
-faceplate_thermal = IjectorThermal(thermal_conductivity_stainless, wall_thickness, std.fuel_injection_temperature, std.pre_injection_pressure, std.fuel_massflow, std.fuel_composition, std.fuel_mass_fraction,manifold_hydrolic_diameter, std.total_massflow, std.chamber_pressure, velocity, gas_temperature)
-faceplate_thermal.wall_temperature()
-print('maximum face plate temperature: ', faceplate_thermal.max_wall_temperature, 'K')
-print('coolant side face plate temperature: ', faceplate_thermal.coolant_wall_temp, 'K')
+coolant_side_faceplate_temp = np.ndarray(len(chamber_radi))
+gas_side_faceplate_temp = np.ndarray(len(chamber_radi))
+
+for i in range(len(chamber_radi)):
+	faceplate_thermal = IjectorThermal(thermal_conductivity_stainless, wall_thickness, std.fuel_injection_temperature, std.pre_injection_pressure, std.fuel_massflow, std.fuel_composition, std.fuel_mass_fraction,hydrolic_diameter[i], std.total_massflow, std.chamber_pressure, velocity, gas_temperature)
+	faceplate_thermal.wall_temperature(flow_velocity[i])
+	coolant_side_faceplate_temp[i] = faceplate_thermal.coolant_wall_temp
+	gas_side_faceplate_temp[i] = faceplate_thermal.max_wall_temperature
+
+
+print('maximum face plate temperature: ', max(gas_side_faceplate_temp), 'K')
+print('maximum coolant side face plate temperature: ', max(coolant_side_faceplate_temp), 'K')
+
+plt.plot(chamber_radi*1e3, gas_side_faceplate_temp, label="maximum faceplate temperature")
+plt.plot(chamber_radi*1e3, coolant_side_faceplate_temp, label="coolant side faceplate temperature")
+plt.xlabel("chamber radius [m]")
+plt.ylabel("temperature [K]")
+plt.legend(loc="best")
+plt.grid()
+plt.show()
+
+plt.plot(chamber_radi*1e3, flow_velocity)
+plt.xlabel("chamber radius [m]")
+plt.ylabel("flow velocity [m/s]")
+plt.grid()
+plt.show()
+

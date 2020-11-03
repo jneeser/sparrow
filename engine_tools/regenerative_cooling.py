@@ -5,14 +5,14 @@ import rocketcea
 from matplotlib import pyplot as plt
 import csv
 
-
+data = np.genfromtxt('optimised_geometry.csv', delimiter=',', dtype=None, skip_header = 1)
 geometry = np.genfromtxt('sparrow_contour_1_5.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
-wall_thickness = np.ones(len(geometry[:,1]))*0.4e-3
+wall_thickness = data[:,11]
 wall_thickness_tbc = 0.1e-3
-thermal_conductivity = 28							# Inconel at 800 C
-thermal_conductivity_tbc = 2
-channel_hydrolic_diameter = np.ones(len(geometry[:,1]))*1.5e-3
-number_of_channels = 60
+thermal_conductivity = 24							# Inconel at 800 C
+thermal_conductivity_tbc = 0.8
+channel_hydrolic_diameter = (data[:,9] + data[:,10])/2
+number_of_channels = 42*2
 
 # global properties
 chamber_pressure = 50e5 			# [Pa]
@@ -20,8 +20,6 @@ fuel_inlet_pressure = 70e5			# [Pa]
 fuel_temperature = 288				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 7.93
-pre_injection_pressure = 1.25*chamber_pressure	# [Pa]
-
 
 # CEA input values 
 OF = 1.61					# actual OF ratio 
@@ -55,7 +53,7 @@ axes[2].set_ylabel('heat flux [MW/m^2]')
 axes[3].plot(geometry[:,0][::-1], heat.coolant_pressure)
 axes[3].set_ylabel('coolant pressure [MPa]')
 
-axes[4].plot(geometry[:,0][::-1], heat.tbc_wall_temp)
+axes[4].plot(geometry[:,0][::-1], heat.coolant_temp)
 axes[4].set_ylabel('coolant temperature [K]')
 
 plt.xlabel('x coordiante [m]')
@@ -71,3 +69,20 @@ with open('heat_transfer_coefficients.csv', 'w', newline='') as file:
 		writer.writerow([geometry[i,0], geometry[i,1], heat.halpha_gas[len(geometry[:,1]) - i - 1]])
 
 '''
+wt1_arr = data[:,11][::-1]
+wto_arr = data[:,12][::-1]
+rf1i_arr = data[:,13][::-1]
+rf1o_arr = data[:,14][::-1]
+rf2_arr = data[:,15][::-1]
+t_arr = data[:,16][::-1]
+
+idx = np.where(heat.q == max(heat.q))
+print(heat.coolant_temp[idx])
+print(heat.flowvelocity[idx])
+print(wt1_arr[idx])
+print(wto_arr[idx])
+print(rf1i_arr[idx])
+print(rf1o_arr[idx])
+print(rf2_arr[idx])
+print(t_arr[idx])
+

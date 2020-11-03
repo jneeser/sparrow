@@ -10,7 +10,7 @@ fuel_inlet_pressure = 70e5			# [Pa]
 fuel_temperature = 288				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 7.93
-pre_injection_pressure = 1.25*chamber_pressure	# [Pa]
+pre_injection_pressure = 1.2*chamber_pressure	# [Pa]
 fuel_injection_temperature = 450 	# [K]
 chamber_diameter = 130e-3			# [m]
 throat_diameter = 49.72e-3			# [m]
@@ -32,11 +32,13 @@ print(fuel_massflow)
 
 
 # Hot gas properties
-# can choose beteen 'chamber'. 'throat' and 'exit' for metric_cea_output\
+# can choose beteen 'chamber'. 'throat' and 'exit' for metric_cea_output
 cea = et.CEA(ethanol90, oxidiser, chamber_pressure)
 cea.metric_cea_output('chamber', OF, expansion_ratio)
 
-
+# liquid properties
+liquid_fuel = thermo.Mixture(fuel_composition, ws = fuel_mass_fraction, T=fuel_injection_temperature, P=pre_injection_pressure)
+liquid_ox = thermo.Chemical(ox_composition, T=ox_temperature, P=pre_injection_pressure)
 
 if __name__ == "__main__":
 	print('gas static temperature: ', cea.T_static, '[K]')
@@ -45,12 +47,6 @@ if __name__ == "__main__":
 	print('ratio of specific heats: ', cea.gamma, '[-]')
 	print('gas thermal conductivity: ', cea.k, '[W/m/K]')
 	#print('gas mole fractions: ', cea.mole_fractions)
-
-
-
-	# liquid properties
-	liquid_fuel = thermo.Mixture(fuel_composition, ws = fuel_mass_fraction, T=fuel_temperature, P=pre_injection_pressure)
-	liquid_ox = thermo.Chemical(ox_composition, T=ox_temperature, P=pre_injection_pressure)
 
 	print('fuel density: ', liquid_fuel.rho, '[kg/m^3]')
 	print('fuel dynamic visconsity', liquid_fuel.mu, '[Pa s]')

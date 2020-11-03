@@ -97,6 +97,9 @@ class GasInjector():
 
 
 class AnnularOrifice():
+    """
+    DO NOT USE
+    """
     def __init__(self, fluid, mixture, temperature, pressure, length, pressuredrop, inner_radius, outer_radius):
         self.fluid = thermo.Mixture(fluid, ws=mixture, T=temperature, P=pressure)
         self.length = length
@@ -204,24 +207,53 @@ def annulus_verification(inner_radius, outer_radius, fluid, pressure_range, temp
     plt.ylabel('pressure drop [bar]')
     plt.legend(loc='best')
     plt.show()
+
+
+def ohnesorge_number(injector, n_holes, massflow, fluid_mass_fractions, fluid_mole_fractions):
+    ohnesorge_nr = []
+    massflows = massflow/n_holes
+    for m in massflows:
+        injector.massflow = m
+        injector.injector()                 # calculate new injector properties based on new pressure drop 
+        surface_tension = injector.fluid.SurfaceTensionMixture(ws=fluid_mass_fractions, zs=fluid_mole_fractions, T=injector.fluid.T, P=injector.fluid.P)
+        We = injector.fluid.rho*injector.velocity**2*injector.diameter / surface_tension
+        Re = injector.fluid.rho*injector.velocity*injector.diameter / injector.fluid.mu
+        ohnesorge_nr.append(np.sqrt(We)/Re)
+
+    plt.plot(n_holes, ohnesorge_nr)
+    plt.grid()
+    plt.xlabel('number of holes [-]')
+    plt.ylabel('Weber Number [-]')
+    plt.show()
     
 
 if __name__ == '__main__':
 
-    n_holes = 4
+    n_holes = 36
+    dp = 10e5
 
-    liq_inj = LiquidInjector(['h2o2', 'h2o'], [0.9,0.1], 288, 26.5e5, 3.46e-3, 0.163/n_holes, 6.5e5, np.pi/6)
+    liq_inj = LiquidInjector(['o2'], [1], 90, 50e5+dp, 2e-3, 3.5858/n_holes, dp, np.pi/2)
     liq_inj.injector()
-    #print(liq_inj.mu)
+    print(liq_inj.velocity)
     #print(liq_inj.diameter*1000)
 
     gas_inj = GasInjector('o2', 288, 26e5, 4e-3, 0.163/4, 6e5, 20e-3, np.pi/2)
     gas_inj.injector()
     #print(gas_inj.mu)
 
-    an_inj = AnnulusInjector(['h2o'], [1], 288, 29e5, 2e-3, 24e-3, 0.447, 9e5)
+    an_inj = AnnulusInjector(['c2h5oh','h2o'], [0.9,0.1], 450, 62.5e5, 2e-3, 30e-3, 2.227, 16.65e5)
     an_inj.injector()
     print(an_inj.mu)
     print(an_inj.diameter*1000)
+    print(an_inj.velocity)
 
-    #annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)
+    print((liq_inj.velocity*liq_inj.massflow*n_holes)/(an_inj.velocity*an_inj.massflow))
+
+    mass_fraction = [0.9,0.1]
+    mole_fraction = [46/64, 18/64]
+    n_holes = np.arange(20,100,1)
+    massflow = 3.5858
+
+    #ohnesorge_number(liq_inj, n_holes, massflow, mass_fraction, mole_fraction)
+
+    annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)
