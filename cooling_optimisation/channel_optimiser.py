@@ -16,9 +16,9 @@ import time
 fuel_composition = ['C2H5OH']
 fuel_mass_fraction = [1]
 number_of_channels = 42*2
-wall_thickness_tbc = 0.15e-3
+wall_thickness_tbc = 0.1e-3
 thermal_conductivity = 24							# Inconel at 800 C
-thermal_conductivity_tbc = 2
+thermal_conductivity_tbc = 0.8
 
 # create initial objects 
 geometry = np.genfromtxt('sparrow_contour_1_5.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
@@ -35,8 +35,8 @@ x_coordinates = geometry[:,0][::-1]
 # starting the section iterator 
 ###############################
 
-tol = 1e-2 							# acceptable temeprature difference 
-max_iter = 1000
+tol = 1e-1 							# acceptable temeprature difference 
+max_iter = 100
 
 # empty output arrays for pressuredrop.py output
 fi_arr = np.ndarray(len(y_coordinates))
@@ -67,12 +67,13 @@ halpha_gas_arr = np.ndarray(len(y_coordinates))
 sec_length_arr = np.ndarray(len(y_coordinates))
 
 # material 
-in718 = pressuredrop.metal(E=200e9,k=thermal_conductivity,v=0.33,alpha=12e-6,sig_yield=([1150e6,1150e6,950e6,650e6,0],[273,50+273,700+273,850+273,1260+273]))
-
+in718 = pressuredrop.metal(E=([208e9,205e9,202e9,194e9,186e9,179e9,172e9,162e9,127e9,78e9],[21+273,93+273,204+273,316+273,427+273,469+273,538+273,760+273,871+273,954+273]),k=24,v=0.33,alpha=12e-6,sig_yield=([1150e6,1150e6,950e6,650e6,0],[273,50+273,700+273,850+273,1260+273]))
+#alu = pressuredrop.metal(E=57e9,k=thermal_conductivity,v=0.33,alpha=21e-6,sig_yield=([180e6,180e6,175e6,155e6,140,85,50,25,0],[293,403,453,493,523,573,623,673,753]))
 
 #TODO implement pressure drops 
 # initial guess
-wall_temperature = 600
+cool_side_wall_temp = 400
+wall_temperature = 400
 coolant_temp = 400
 radiation = 0
 coolant_pressure = 70e5
@@ -104,21 +105,23 @@ for i in range(len(y_coordinates)):
 		except:
 			print('skipped section: ', i, ' due to infeasible solution')
 			pass
+
 		avg_hydrolic_diameter = (new_params.dhi + new_params.dho) / 2 
 		wall_thickness = new_params.par.wt1
 
-		heat_flux, new_wall_temp, tbc_wall_temp, Re, Nu, radiation, halpha = heat.iterator(y_coordinates[i], avg_hydrolic_diameter, section_length, wall_thickness, mach[i], t_aw[i])
+		heat_flux, new_wall_temp, cool_side_wall_temp, tbc_wall_temp, Re, Nu, radiation, halpha = heat.iterator(y_coordinates[i], avg_hydrolic_diameter, section_length, wall_thickness, mach[i], t_aw[i])
 
 		difference = abs(new_wall_temp - wall_temperature)
 
 		iteration += 1
 		print('section: ', i, ' sub-iteration: ', iteration, ':')
 		print('	temperature difference: ', difference)
-		print('	wall temperature: ', wall_temperature)
+		print('	max wall temperature: ', wall_temperature)
 		print('	coolant temperature: ', heat.coolant.T)
 
 		if iteration > max_iter:
 			raise ValueError('Non-convergence, iteration number exceeded ', max_iter)
+			
 
 		wall_temperature = new_wall_temp	
 		wt1 = new_params.par.wt1
@@ -126,6 +129,10 @@ for i in range(len(y_coordinates)):
 		rf2 = new_params.par.rf2
 		t = new_params.par.t
 		wt2 = new_params.par.wt2
+
+		if iteration > 10:
+			print("not converged after 10 iterations, moving to section: ", i+1)
+			break
 
 	T_new = heat.coolant.T + heat_flux*2*np.pi*y_coordinates[i]*section_length / (heat.coolant_massflow*heat.coolant.Cp) 
 	heat.coolant.calculate(P=heat.coolant.P, T=T_new)
@@ -161,11 +168,10 @@ for i in range(len(y_coordinates)):
 t2 = time.time()
 print('optimisation runtime: ', t2-t1, '[s]')
 
-
 with open('optimised_geometry.csv', 'w', newline='') as file:
 	writer = csv.writer(file)
 	writer.writerow(["x coordinate","y_coordinate","gas heat transfer coefficient", "heat flux", "max wall temperature", "Re inner", "Re outer", "pressure drops", "section lenghts","hydrolic diameter inner",
-					 "hydrolic diameter outer", "wt1", "wto", "rf1 inner", "rf1 outer", "rf2", "inner wall thickness", "hi", "ho", "stress ratios"]
+					 "hydrolic diameter outer", "wt1", "wto", "rf1 inner", "rf1 outer", "rf2", "t", "hi", "ho", "stress ratios"]
 	)
 	for i in range(len(geometry[:,1])):
 		idx = len(geometry[:,1]) - i - 1

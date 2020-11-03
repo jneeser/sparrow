@@ -62,7 +62,7 @@ class parameters:
 
 class metal:
     def __init__(self,E,k,v,alpha,sig_yield):
-        self.E = E
+        self.E = interpolate.interp1d(E[1],E[0],fill_value='extrapolate')
         self.k = k
         self.v = v
         self.alpha = alpha
@@ -70,8 +70,8 @@ class metal:
         self.sig_yield = interpolate.interp1d(sig_yield[1],sig_yield[0],fill_value='extrapolate')
 
 class sim:
-    def __init__(self, max_wall_temp, T_wall,T_cool,h_cha,q_rad,p_cool,p_cha,y_coordinate,SF=1.5):
-        self.max_wall_temp = max_wall_temp
+    def __init__(self, wall_temp, T_wall,T_cool,h_cha,q_rad,p_cool,p_cha,y_coordinate,SF=1.5):
+        self.wall_temp = wall_temp
         self.T_wall = T_wall
         self.T_cool = T_cool
         self.h_cha = h_cha
@@ -79,7 +79,7 @@ class sim:
         self.p_cool = p_cool
         self.p_cha = p_cha
         self.SF = SF
-        self.pd_con = 200000/(y_coordinate)
+        self.pd_con = 260000/(y_coordinate)
 
 
 class physics:
@@ -121,19 +121,21 @@ class physics:
             #print(input)
             geom_update(input)
             flow_update()
-            self.t_tbc = 0.15e-3
-            self.k_tbc = 2
+            self.t_tbc = 0.1e-3
+            self.k_tbc = 0.8
             self.Pr = self.fluid.Pr
             self.hi = ki/self.dhi*0.023*self.Rei**0.8*self.Pr**0.4
             self.ho =  ki/self.dhi*0.023*self.Reo**0.8*self.Pr**0.4
             self.q = (self.sim.T_wall - self.sim.T_cool + self.sim.q_rad/self.sim.h_cha) / (1/self.sim.h_cha + self.par.wt1/self.met.k + 1/self.hi + self.t_tbc/self.k_tbc)
             Li =  np.linalg.norm(self.channeli.pointclasslist[2][0]-self.channeli.pointclasslist[3][0])
 
-            temp_sigma_steady1 = self.met.E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li*3/(4*self.par.wt1**2)
-            temp_sigma_steady2 = self.met.E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li/(4*self.par.wt1**2)
+            E = self.met.E(self.sim.wall_temp)
+
+            temp_sigma_steady1 = E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li*3/(4*self.par.wt1**2)
+            temp_sigma_steady2 = E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li/(4*self.par.wt1**2)
             temp_sigma_start = (self.sim.p_cool)*Li*Li/(4*self.par.wt1**2)
 
-            self.max_temp = self.sim.max_wall_temp
+            self.max_temp = self.sim.wall_temp
 
             self.sigma = np.max(np.abs(np.array([temp_sigma_steady1,temp_sigma_steady2,temp_sigma_start])))
             if self.sigma == temp_sigma_start:
@@ -173,7 +175,7 @@ class physics:
                 {'type': 'ineq', 'fun': pressure_drop_constraint})
         x0 = np.array([self.par.t,self.par.wt1,self.par.rf1i,self.par.rf1o,self.par.rf2])
         #bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.1e-3,2e-3),(0.1e-3,2e-3),(0.15e-3,0.6e-3))
-        bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.4e-3,4e-3),(0.1e-3,4e-3),(0.15e-3,0.6e-3))
+        bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.4e-3,1.5e-3),(0.1e-3,1.5e-3),(0.1e-3,0.6e-3))
         
         if pressure_drop_constraint(x0) > 0 and stress_constraint(x0) > 0:
             self.record_cross.append(mass_optimize(x0))
@@ -249,16 +251,23 @@ if __name__ == "__main__":
     import thermo
 
     ccase = sim(3000,400,5000,1.3e-6,70e5,50e5,0)
-    in718 = metal(E=200e9,k=20,v=0.33,alpha=12e-6,sig_yield=([1150e6,1150e6,950e6,650e6,0],[273,50+273,700+273,850+273,1260+273]))
+    in718 = metal(E=([208e9,205e9,202e9,194e9,186e9,179e9,172e9,162e9,127e9,78e9],[21+273,93+273,204+273,316+273,427+273,469+273,538+273,760+273,871+273,954+273]),k=24,v=0.33,alpha=12e-6,sig_yield=([1150e6,1150e6,950e6,650e6,0],[273,50+273,700+273,850+273,1260+273]))
 
+
+    wall_temperature = 400
+    coolant_temp = 400
+    radiation = 0
+    coolant_pressure = 70e5
+    halpha = 3000
     t = 1.2e-3
     wt1 = 0.6e-3
     wt2 = 0.4e-3
     rf1 = 0.1e-3
     rf2 = 0.1e-3
-    test = parameters(ri=65e-3,t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=48)
 
-    fluid = thermo.Chemical('C2H5OH', T=288, P=50e5)
+    test = parameters(ri=25e-3,t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=42)
+
+    fluid = thermo.Chemical('C2H5OH', T=350, P=50e5)
 
     t1  = time.time()
     test_res = physics(test,in718,ccase, fluid)
