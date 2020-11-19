@@ -169,7 +169,8 @@ class AnnulusInjector():
             mu = newmu  
 
         #print(np.pi*D*di*newmu*np.sqrt(self.fluid.rho*2*self.pressuredrop))
-
+        
+        self.D = D
         self.mu = mu
         self.diameter = di
         self.velocity = vel

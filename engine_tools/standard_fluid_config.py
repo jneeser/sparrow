@@ -11,12 +11,12 @@ fuel_temperature = 288				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 7.93
 pre_injection_pressure = 1.2*chamber_pressure	# [Pa]
-fuel_injection_temperature = 450 	# [K]
+fuel_injection_temperature = 460 	# [K]
 chamber_diameter = 130e-3			# [m]
 throat_diameter = 49.72e-3			# [m]
 
 # CEA input values 
-OF = 1.61					
+OF = 1.61				
 oxidiser = 'LOX'
 ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[90,10])  # new fule blend for CEA
  
@@ -35,6 +35,7 @@ print(fuel_massflow)
 # can choose beteen 'chamber'. 'throat' and 'exit' for metric_cea_output
 cea = et.CEA(ethanol90, oxidiser, chamber_pressure)
 cea.metric_cea_output('chamber', OF, expansion_ratio)
+print(total_massflow*np.sqrt(cea.gamma*8314.5/cea.MW*cea.T_static))
 
 # liquid properties
 liquid_fuel = thermo.Mixture(fuel_composition, ws = fuel_mass_fraction, T=fuel_injection_temperature, P=pre_injection_pressure)
