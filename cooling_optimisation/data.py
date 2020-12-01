@@ -1,7 +1,6 @@
 from matplotlib import pyplot as plt
 import numpy as np
 import csv
-from scipy import signal
 
 data = np.genfromtxt('optimised_geometry.csv', delimiter=',', dtype=None, skip_header = 1)
 
@@ -10,41 +9,38 @@ y = data[:,1]
 halpha_gas_arr = data[:,2]
 q_total_arr = data[:,3]
 wall_t_arr = data[:,4]
-Rei_arr = data[:,5]
-Reo_arr = data[:,6]
-dp_arr = data[:,7]
-sec_length_arr = data[:,8]
-dhi_arr = data[:,9]
-dho_arr = data[:,10]
-wt1_arr = data[:,11]
-wto_arr = data[:,12]
-rf1i_arr = data[:,13]
-rf1o_arr = data[:,14]
-rf2_arr = data[:,15]
-t_arr = data[:,16]
-hi_arr = data[:,17]
-ho_arr = data[:,18]
-stress_ratio_arr = data[:,19]
-
-b, a = signal.butter(1, 0.1)
-zi = signal.lfilter_zi(b, a)
-z, _ = signal.lfilter(b, a, rf1i_arr, zi=zi*rf1i_arr[0])
+tbc_t_arr = data[:,5]
+Rei_arr = data[:,6]
+Reo_arr = data[:,7]
+dp_arr = data[:,8]
+sec_length_arr = data[:,9]
+dhi_arr = data[:,10]
+dho_arr = data[:,11]
+wt1_arr = data[:,12]
+wto_arr = data[:,13]
+rf1i_arr = data[:,14]
+rf1o_arr = data[:,15]
+rf2_arr = data[:,16]
+t_arr = data[:,17]
+hi_arr = data[:,18]
+ho_arr = data[:,19]
+stress_ratio_arr = data[:,20]
 
 f, axes = plt.subplots(5, 1)
-axes[0].plot(x, y*1e-3)
+axes[0].plot(x, y*1e3)
 axes[0].set_ylabel('contour height [mm]')
 
-axes[1].plot(x, wall_t_arr)
-axes[1].set_ylabel('wt1 [mm]')
+axes[1].plot(x, t_arr*1e3)
+axes[1].set_ylabel('t [mm]')
 
-axes[2].plot(x, rf2_arr*1e3)
-axes[2].set_ylabel('rf2 [mm]')
+axes[2].plot(x, np.round(wto_arr*1e3,4))
+axes[2].set_ylabel('Wto [mm]')
 
-axes[3].plot(x, rf1i_arr*1e3)
-axes[3].set_ylabel('rf1i [mm]')
+axes[3].plot(x, np.round(rf2_arr*1e3,4))
+axes[3].set_ylabel('R2 [mm]')
 
-axes[4].plot(x, z*1e3)
-axes[4].set_ylabel('rf1o filtered [mm]')
+axes[4].plot(x, np.round(rf1o_arr*1e3,4))
+axes[4].set_ylabel('R1o [mm]')
 
 plt.xlabel('x coordinate [m]')
 plt.show()

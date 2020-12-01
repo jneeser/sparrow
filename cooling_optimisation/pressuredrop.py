@@ -4,10 +4,9 @@ import scipy.optimize
 from scipy import interpolate
 import time
 
-# TODO un-hardcoade TBC heat flux params
-mdt = 2.21 #kg/s
+
+mdt = 2.227 #kg/s
 k = 6e-6 #guess
-ki = 0.167
 
 def f(D,Rev,implicit=True):
     #colebrook equation
@@ -70,7 +69,7 @@ class metal:
         self.sig_yield = interpolate.interp1d(sig_yield[1],sig_yield[0],fill_value='extrapolate')
 
 class sim:
-    def __init__(self, wall_temp, T_wall,T_cool,h_cha,q_rad,p_cool,p_cha,y_coordinate,SF=1.5):
+    def __init__(self, wall_temp, T_wall,T_cool,h_cha,q_rad,p_cool,p_cha,y_coordinate,k_tbc,t_tbc,SF=1.5):
         self.wall_temp = wall_temp
         self.T_wall = T_wall
         self.T_cool = T_cool
@@ -79,11 +78,13 @@ class sim:
         self.p_cool = p_cool
         self.p_cha = p_cha
         self.SF = SF
-        self.pd_con = 260000/(y_coordinate)
+        self.pd_con = 220000/y_coordinate
+        self.k_tbc = k_tbc
+        self.t_tbc = t_tbc
 
 
 class physics:
-    def __init__(self,x,metal,sim, fluid):
+    def __init__(self,x,metal,sim,fluid):
         self.par = x
         self.sim = sim
         self.met = metal
@@ -114,24 +115,26 @@ class physics:
                 self.fo = f(self.dho,self.Reo)
                 return deltaP(self.dhi,self.fi,self.fluid.rho,self.vi)-deltaP(self.dho,self.fo,self.fluid.rho,self.vo)
             
-            scipy.optimize.root_scalar(func,bracket=[0.1,0.9])
+            scipy.optimize.root_scalar(func,bracket=[0.01,0.99])
             #print(self.Vi/self.Vo)
         
         def stress_constraint(input):
             #print(input)
             geom_update(input)
             flow_update()
-            self.t_tbc = 0.1e-3
-            self.k_tbc = 0.8
             self.Pr = self.fluid.Pr
-            self.hi = ki/self.dhi*0.023*self.Rei**0.8*self.Pr**0.4
-            self.ho =  ki/self.dhi*0.023*self.Reo**0.8*self.Pr**0.4
-            self.q = (self.sim.T_wall - self.sim.T_cool + self.sim.q_rad/self.sim.h_cha) / (1/self.sim.h_cha + self.par.wt1/self.met.k + 1/self.hi + self.t_tbc/self.k_tbc)
-            Li =  np.linalg.norm(self.channeli.pointclasslist[2][0]-self.channeli.pointclasslist[3][0])
+            self.hi = self.fluid.k/self.dhi*0.023*self.Rei**0.8*self.Pr**0.4
+            self.ho = self.fluid.k/self.dhi*0.023*self.Reo**0.8*self.Pr**0.4
 
+            if self.sim.t_tbc == 0:
+                self.q = (self.sim.T_wall - self.sim.T_cool + self.sim.q_rad/self.sim.h_cha) / (1/self.sim.h_cha + self.par.wt1/self.met.k + 1/self.hi)
+            else:
+                self.q = (self.sim.T_wall - self.sim.T_cool + self.sim.q_rad/self.sim.h_cha) / (1/self.sim.h_cha + self.par.wt1/self.met.k + 1/self.hi + self.sim.t_tbc/self.sim.k_tbc)
+            
+            Li =  np.linalg.norm(self.channeli.pointclasslist[2][0]-self.channeli.pointclasslist[3][0])
             E = self.met.E(self.sim.wall_temp)
 
-            temp_sigma_steady1 = E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li*3/(4*self.par.wt1**2)
+            temp_sigma_steady1 = E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li*3/(4*self.par.wt1**2)  
             temp_sigma_steady2 = E * self.met.alpha * self.q * self.par.wt1 / (2*(1-self.met.v)*self.met.k) - (self.sim.p_cool-self.sim.p_cha)*Li*Li/(4*self.par.wt1**2)
             temp_sigma_start = (self.sim.p_cool)*Li*Li/(4*self.par.wt1**2)
 
@@ -174,8 +177,8 @@ class physics:
         cons = ({'type': 'ineq', 'fun': stress_constraint},
                 {'type': 'ineq', 'fun': pressure_drop_constraint})
         x0 = np.array([self.par.t,self.par.wt1,self.par.rf1i,self.par.rf1o,self.par.rf2])
-        #bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.1e-3,2e-3),(0.1e-3,2e-3),(0.15e-3,0.6e-3))
-        bounds =((1.5e-3,4e-3),(0.4e-3,2e-3),(0.4e-3,1.5e-3),(0.1e-3,1.5e-3),(0.1e-3,0.6e-3))
+        #bounds = ((1.5e-3,4e-3),(0.4e-3,2e-3),(0.1e-3,2e-3),(0.1e-3,2e-3),(0.15e-3,0.6e-3))
+        bounds = ((2e-3,4e-3),(0.7e-3,1e-3),(0.2e-3,0.6e-3),(0.1e-3,0.6e-3),(0.1e-3,0.6e-3))
         
         if pressure_drop_constraint(x0) > 0 and stress_constraint(x0) > 0:
             self.record_cross.append(mass_optimize(x0))

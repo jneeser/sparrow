@@ -35,7 +35,7 @@ x_coordinates = geometry[:,0][::-1]
 # starting the section iterator 
 ###############################
 
-tol = 1e-1 							# acceptable temeprature difference 
+tol = 1e-2 							# acceptable temeprature difference 
 max_iter = 100
 
 # empty output arrays for pressuredrop.py output
@@ -59,6 +59,7 @@ stress_ratio_arr = np.ndarray(len(y_coordinates))
 
 # empty arrays for heatflux outputs 
 wall_t_arr = np.ndarray(len(y_coordinates))
+tbc_t_arr = np.ndarray(len(y_coordinates))
 coolant_t_arr = np.ndarray(len(y_coordinates))
 coolant_p_arr = np.ndarray(len(y_coordinates))
 q_total_arr = np.ndarray(len(y_coordinates))
@@ -67,20 +68,25 @@ halpha_gas_arr = np.ndarray(len(y_coordinates))
 sec_length_arr = np.ndarray(len(y_coordinates))
 
 # material 
-in718 = pressuredrop.metal(E=([208e9,205e9,202e9,194e9,186e9,179e9,172e9,162e9,127e9,78e9],[21+273,93+273,204+273,316+273,427+273,469+273,538+273,760+273,871+273,954+273]),k=24,v=0.33,alpha=12e-6,sig_yield=([1150e6,1150e6,950e6,650e6,0],[273,50+273,700+273,850+273,1260+273]))
+E_in718 = [199947961502.171,198569010043.535,195811107126.264,193053204208.992,190295301291.721,186847922645.132,184090019727.861,180642641081.271,177884738164,174437359517.411,170989980870.822,166853126494.915,163405747848.326,158579417743.101,153753087637.876,146858330344.698,139274097322.202,129621437111.752,119968776901.302,109626640961.535,98595029292.4497]
+T1_in718 = [294.3,310.9,366.5,422,477.6,533.2,588.7,644.3,699.8,755.4,810.9,866.5,922,977.6,1033.2,1088.7,1144.3,1199.8,1255.4,1310.9,1366.5]
+sig_in718 = [1123.85e6,1075.58e6,1020.42e6,965.27e6,930.79e6,799.79e6,689.48e6]
+T2_in718 = [293,588.7,810.9,922,977.6,1033.2,1088.7]
+in718 = pressuredrop.metal(E=(E_in718,T1_in718),k=thermal_conductivity,v=0.29,alpha=12e-6,sig_yield=(sig_in718, T2_in718))
 #alu = pressuredrop.metal(E=57e9,k=thermal_conductivity,v=0.33,alpha=21e-6,sig_yield=([180e6,180e6,175e6,155e6,140,85,50,25,0],[293,403,453,493,523,573,623,673,753]))
 
-#TODO implement pressure drops 
+
 # initial guess
 cool_side_wall_temp = 400
 wall_temperature = 400
 coolant_temp = 400
 radiation = 0
-coolant_pressure = 70e5
+coolant_pressure = 80e5
+heat.P_local = 50e5
 halpha = 3000
-t = 1.2e-3
+t = 2e-3
 wt1 = 0.6e-3
-wt2 = 0.4e-3
+wt2 = 0.6e-3
 rf1 = 0.1e-3
 rf2 = 0.1e-3
 
@@ -98,12 +104,12 @@ for i in range(len(y_coordinates)):
 	difference = 1
 
 	while difference > tol:
-		initial_params = pressuredrop.parameters(ri=y_coordinates[i],t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=int(number_of_channels/2))
-		initial_heat = pressuredrop.sim(wall_temperature, t_aw[i], heat.coolant.T, halpha, radiation, coolant_pressure,std.chamber_pressure, y_coordinates[i])
+		initial_params = pressuredrop.parameters(ri=y_coordinates[i],t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=np.round(number_of_channels/2,0))
+		initial_heat = pressuredrop.sim(wall_temperature, t_aw[i], heat.coolant.T, halpha, radiation, coolant_pressure, heat.P_local, y_coordinates[i], thermal_conductivity_tbc, wall_thickness_tbc)
 		try:
 			new_params = pressuredrop.physics(initial_params,in718,initial_heat,heat.coolant)
 		except:
-			print('skipped section: ', i, ' due to infeasible solution')
+			print('skipped iteration: ', iteration, ' due to infeasible solution')
 			pass
 
 		avg_hydrolic_diameter = (new_params.dhi + new_params.dho) / 2 
@@ -116,13 +122,13 @@ for i in range(len(y_coordinates)):
 		iteration += 1
 		print('section: ', i, ' sub-iteration: ', iteration, ':')
 		print('	temperature difference: ', difference)
-		print('	max wall temperature: ', wall_temperature)
-		print('	coolant temperature: ', heat.coolant.T)
+		print('	max wall temperature: ', round(wall_temperature,2))
+		print('	stress ratio: ', round(new_params.sigma_rat,2))
 
 		if iteration > max_iter:
 			raise ValueError('Non-convergence, iteration number exceeded ', max_iter)
 			
-
+		# Update initial guess
 		wall_temperature = new_wall_temp	
 		wt1 = new_params.par.wt1
 		rf1 = new_params.par.rf1i
@@ -136,6 +142,7 @@ for i in range(len(y_coordinates)):
 
 	T_new = heat.coolant.T + heat_flux*2*np.pi*y_coordinates[i]*section_length / (heat.coolant_massflow*heat.coolant.Cp) 
 	heat.coolant.calculate(P=heat.coolant.P, T=T_new)
+	coolant_pressure -= new_params.dp*section_length
 
 
 	# updating arrays 
@@ -164,18 +171,19 @@ for i in range(len(y_coordinates)):
 	q_rad_arr[i] = radiation
 	halpha_gas_arr[i] = halpha
 	sec_length_arr[i] = section_length
+	tbc_t_arr[i] = tbc_wall_temp
 
 t2 = time.time()
 print('optimisation runtime: ', t2-t1, '[s]')
 
 with open('optimised_geometry.csv', 'w', newline='') as file:
 	writer = csv.writer(file)
-	writer.writerow(["x coordinate","y_coordinate","gas heat transfer coefficient", "heat flux", "max wall temperature", "Re inner", "Re outer", "pressure drops", "section lenghts","hydrolic diameter inner",
+	writer.writerow(["x coordinate","y_coordinate","gas heat transfer coefficient", "heat flux", "max wall temperature", "tbc wall temperature", "Re inner", "Re outer", "pressure drops", "section lenghts","hydrolic diameter inner",
 					 "hydrolic diameter outer", "wt1", "wto", "rf1 inner", "rf1 outer", "rf2", "t", "hi", "ho", "stress ratios"]
 	)
 	for i in range(len(geometry[:,1])):
 		idx = len(geometry[:,1]) - i - 1
-		writer.writerow([geometry[i,0], geometry[i,1], halpha_gas_arr[idx], q_total_arr[idx], wall_t_arr[idx], Rei_arr[idx], Reo_arr[idx], dp_arr[idx], sec_length_arr[idx], dhi_arr[idx],
+		writer.writerow([geometry[i,0], geometry[i,1], halpha_gas_arr[idx], q_total_arr[idx], wall_t_arr[idx], tbc_t_arr[idx], Rei_arr[idx], Reo_arr[idx], dp_arr[idx], sec_length_arr[idx], dhi_arr[idx],
 						dho_arr[idx], wt1_arr[idx], wto_arr[idx], rf1i_arr[idx], rf1o_arr[idx], rf2_arr[idx], t_arr[idx], hi_arr[idx], ho_arr[idx], stress_ratio_arr[idx]
 		])
 
