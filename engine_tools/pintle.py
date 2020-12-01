@@ -29,7 +29,7 @@ class Pintle():
 		radial_local_area = np.pi * self.oxidiser_injector.diameter**2/4
 		axial_local_area = self.fuel_injector.diameter*self.oxidiser_injector.diameter	
 		self.lmr = self.oxidiser_injector.fluid.rho*self.oxidiser_injector.velocity**2*radial_local_area / (self.fuel_injector.fluid.rho*self.fuel_injector.velocity**2*axial_local_area)
- 		
+
 		alpha = 0.7
 		beta = 2.0
 		self.spray_angle = alpha * np.arctan(beta * self.lmr)
@@ -81,10 +81,13 @@ class Pintle():
 				axial_momentum = m_fuel * v_fuel
 				tmr[i][j] = radial_momentum/axial_momentum
 
+		print(np.max(tmr))
+		print(np.max(np.degrees(spray_angles)))
+
 		x,y = np.meshgrid(ox_pressure_range,fuel_pressure_range)
 
 		fig, ax = plt.subplots()
-		ax.set_title('spray angles [-]')
+		ax.set_title('spray angles [deg]')
 		c = ax.pcolormesh(x/1e6, y/1e6, np.degrees(spray_angles))
 		plt.scatter(self.oxidiser_injector.pressuredrop/1e6, self.fuel_injector.pressuredrop/1e6, self.spray_angle, color='red', label='design point')
 		ax.axis([np.min(x)/1e6, np.max(x)/1e6, np.min(y)/1e6, np.max(y)/1e6])

@@ -3,6 +3,7 @@ import thermo
 from scipy.optimize import fsolve
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import csv
 
 import standard_fluid_config as std
 
@@ -105,6 +106,8 @@ class IjectorThermal():
 		self.max_wall_temperature = new_wall_temp
 		self.heat_flux = heat_flux
 		self.coolant_wall_temp = coolant_wall_temp
+		self.halpha_c = halpha_c
+		self.halpha = halpha
 
 
 if __name__ == "__main__":
@@ -137,12 +140,14 @@ if __name__ == "__main__":
 
 	coolant_side_faceplate_temp = np.ndarray(len(chamber_radi))
 	gas_side_faceplate_temp = np.ndarray(len(chamber_radi))
+	halpha_c = np.ndarray(len(chamber_radi))
 
 	for i in range(len(chamber_radi)):
-		faceplate_thermal = IjectorThermal(thermal_conductivity_stainless, wall_thickness, std.fuel_injection_temperature, std.pre_injection_pressure, std.fuel_massflow, std.fuel_composition, std.fuel_mass_fraction,hydrolic_diameter[i], std.total_massflow, std.chamber_pressure, velocity, gas_temperature)
+		faceplate_thermal = IjectorThermal(thermal_conductivity_stainless, wall_thickness, std.fuel_injection_temperature, std.pre_injection_pressure, std.fuel_massflow, std.fuel_composition, std.fuel_mass_fraction,hydrolic_diameter[i], std.total_massflow, std.chamber_pressure, velocity)
 		faceplate_thermal.wall_temperature(flow_velocity[i])
 		coolant_side_faceplate_temp[i] = faceplate_thermal.coolant_wall_temp
 		gas_side_faceplate_temp[i] = faceplate_thermal.max_wall_temperature
+		halpha_c[i] = faceplate_thermal.halpha_c
 
 
 	print('maximum face plate temperature: ', max(gas_side_faceplate_temp), 'K')
@@ -161,3 +166,14 @@ if __name__ == "__main__":
 	plt.ylabel("flow velocity [m/s]")
 	plt.grid()
 	plt.show()
+
+
+	# export geometric parameters in mm for catia import 
+	with open('coolant_halpha.csv', 'w', newline='') as file:
+		writer = csv.writer(file)
+		writer.writerow(["chamber radius [m]", "coolant heat transfer coefficient [W/m^2/K]"]
+		)
+		for idx in range(len(chamber_radi)):
+			writer.writerow([chamber_radi[idx], halpha_c[idx]])
+
+	

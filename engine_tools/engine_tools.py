@@ -210,8 +210,9 @@ class Heattransfer():
 		
 	def radiation(self, y_coordinate, mach):
 		T_local = self.cea.T_static/(1 + (self.cea.gamma-1)/2 * mach**2)
-		p_co2 = self.cea.mole_fractions[1]['*CO2'][0] * self.chamber_pressure
-		p_h2o = self.cea.mole_fractions[1]['H2O'][0] * self.chamber_pressure
+		P_local = self.chamber_pressure/((1 + (self.cea.gamma-1)/2 * mach**2)**(self.cea.gamma/(self.cea.gamma-1)))
+		p_co2 = self.cea.mole_fractions[1]['*CO2'][0] * P_local
+		p_h2o = self.cea.mole_fractions[1]['H2O'][0] * P_local
 		q_r_co2 = 4 * (p_co2/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
 		q_r_h2o = 5.74 * (p_h2o/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
 
@@ -224,10 +225,10 @@ class Heattransfer():
 		Re = self.coolant.rho*flowvelocity*hydrolic_diameter/self.coolant.mu
 		k = self.coolant.Cp*self.coolant.mu/Pr
 
-		#wall_fluid = thermo.Mixture(self.coolant_species, ws=self.coolant_massfraction, P=self.coolant.P, T=coolant_wall_temperature)
+		wall_fluid = thermo.Mixture(self.coolant_species, ws=self.coolant_massfraction, P=self.coolant.P, T=coolant_wall_temperature)
 		
-		Nu = 0.023*Re**0.8*Pr**0.4#*(self.coolant.T/coolant_wall_temperature) ** (0.57 - 1.59*hydrolic_diameter/x_coordinate)
-		#Nu = 0.0208*Re**0.8*Pr**0.4*(1+0.01457*wall_fluid.mu/self.coolant.mu)  #Hess & Kunz relationship
+		#Nu = 0.023*Re**0.8*Pr**0.4#*(self.coolant.T/coolant_wall_temperature) ** (0.57 - 1.59*hydrolic_diameter/x_coordinate)
+		Nu = 0.0208*Re**0.8*Pr**0.4*(1+0.01457*wall_fluid.mu/self.coolant.mu)  #Hess & Kunz relationship
 		halpha = Nu*k/hydrolic_diameter
 
 		#G = self.coolant_massflow/coolant_area
@@ -268,7 +269,7 @@ class Heattransfer():
 				tbc_wall_temp = - ((heat_flux - radiation)/halpha - adiabatic_wall_temperature)
 
 			new_coolant_wall_temp = -heat_flux*wall_thickness/self.thermal_conductivity + new_wall_temp
-
+			
 			difference_wall = abs(new_wall_temp - wall_temperature)
 			difference_coolant = abs(new_coolant_wall_temp - coolant_wall_temperature)
 

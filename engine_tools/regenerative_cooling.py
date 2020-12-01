@@ -8,21 +8,21 @@ import csv
 data = np.genfromtxt('optimised_geometry.csv', delimiter=',', dtype=None, skip_header = 1)
 geometry = np.genfromtxt('sparrow_contour_1_5.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
 wall_thickness = data[:,12]
-wall_thickness_tbc = 0.08e-3
+wall_thickness_tbc = 0.1e-3
 thermal_conductivity = 24							# Inconel at 800 C
 thermal_conductivity_tbc = 0.8
 channel_hydrolic_diameter = (data[:,10] + data[:,11])/2
-number_of_channels = 36*2
+number_of_channels = 42*2
 
 # global properties
 chamber_pressure = 50e5 			# [Pa]
-fuel_inlet_pressure = 70e5			# [Pa]
+fuel_inlet_pressure = 75e5			# [Pa]
 fuel_temperature = 288				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 7.93
 
 # CEA input values 
-OF = 1.61					# actual OF ratio 
+OF = 1.61				
 oxidiser = 'LOX'
 ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[90,10])  # new fuel blend for CEA
  
