@@ -9,7 +9,7 @@ import geom_class as gc
 import NASA_film_model as film
 
 geometry = np.genfromtxt('sparrow_50bar.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
-t = 1.9e-3
+t = 2e-3
 wt1 = 0.55e-3
 wt2 = 0.6e-3
 rf1 = 0.2e-3
@@ -24,7 +24,7 @@ method = 'cinjarew'
 
 # global properties
 chamber_pressure = 50e5 			# [Pa]
-fuel_inlet_pressure = 70e5			# [Pa]
+fuel_inlet_pressure = 75e5			# [Pa]
 fuel_temperature = 288				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 12
@@ -41,8 +41,8 @@ isnetropic = film.Isentropic(chamber_pressure, cea.T_static, cea.gamma)
 mach = isnetropic.mach(geometry)[::-1]
 T_aw_uncooled = isnetropic.adiabatic_wall_temp(mach, geometry, cea.Pr)
 coolant = thermo.Chemical('C2H5OH', P=60e5, T=350)
-film = film.FilmCooling(coolant, cea, 5.8, 0.5, chamber_pressure, 40e-3, geometry)
-T_aw_cooled = film.T_aw(42,70,mach,T_aw_uncooled,40)[::-1]
+film = film.FilmCooling(coolant, cea, 5.8, 0.5, chamber_pressure, geometry[44,1], geometry)
+T_aw_cooled = film.T_aw(film_start=44, film_end=70, mach=mach, T_aw_uncooled=T_aw_uncooled, n_holes=number_of_channels, chamber_pressure=chamber_pressure)[::-1]
 
 # Thermo input values 
 total_massflow = 5.8 						# [kg/s]
@@ -67,7 +67,7 @@ axes[1].set_ylabel('wall temperature [K]')
 axes[2].plot(geometry[:,0][::-1], heat.q/1e6)
 axes[2].set_ylabel('heat flux [MW/m^2]')
 
-axes[3].plot(geometry[:,0][::-1], heat.t_aw)
+axes[3].plot(geometry[:,0][::-1], heat.coolant_pressure)
 axes[3].set_ylabel('coolant temperature [K]')
 
 plt.xlabel('x coordiante [m]')

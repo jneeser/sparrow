@@ -11,8 +11,8 @@ import injectors as inj
 
 class Isentropic():
 	def __init__(self, total_pressure, total_temperature, gamma):
-		self.p_t = total_pressure
-		self.t_t = total_temperature
+		self.p = total_pressure
+		self.t = total_temperature
 		self.gamma = gamma
 
 	def mach(self, geometry):
@@ -20,38 +20,32 @@ class Isentropic():
 		throat_diameter = 2*min(geometry[:,1])
 		throat_area = np.pi*throat_diameter**2/4
 		mach = np.ndarray(len(y))
-		initial_guess = np.ndarray(len(y))	
-		
-		guess = 10
-		for i in range(len(y)):
-			initial_guess[i] = guess
-			if abs(y[i] - throat_diameter/2) < 1e-6:
-				guess = 0.000001
+		initial = 10
 
 		for i in range(len(y)):
+			if abs(y[i] - throat_diameter/2) < 1e-6:
+				initial = 0.000001
 			local_area = y[i]**2 * np.pi
 			mach_number = lambda M:  1/(M*M) * (2/(self.gamma+1) * (1 + (self.gamma-1)/2*M*M))**((self.gamma+1)/(self.gamma-1)) - (local_area/throat_area)**2
-			mach[i] = sp.optimize.fsolve(mach_number, initial_guess[i])
+			mach[i] = sp.optimize.fsolve(mach_number, initial)
 
 		return mach
 
 	def pressure(self,mach):
-		return self.p_t/((1 + (self.gamma-1)/2 * mach**2)**(self.gamma/(self.gamma-1)))
+		return self.p/((1 + (self.gamma-1)/2 * mach**2)**(self.gamma/(self.gamma-1)))
 
 	def temperature(self,mach):
-		return self.t_t/(1 + (self.gamma-1)/2 * mach**2)
+		return self.t/(1 + (self.gamma-1)/2 * mach**2)
 
 	def adiabatic_wall_temp(self, mach, geometry, Pr):
 		# Assumes turbulent flow in the chamber and laminar flow after the throat
-		y = geometry[:,1]
-		T_aw = np.ndarray(len(y))
-
-		for i in range(len(y)):
+		T_aw = np.ndarray(len(geometry[:,1]))
+		for i in range(len(T_aw)):
 			if mach[i] >= 1:
 				r = Pr**(1/2) 
 			else:
 				r = Pr**(1/3) 	
-			T_aw[i] = self.t_t * (1 + r*(self.gamma - 1)/2 * mach[i]**2) / (1 + (self.gamma - 1)/2 * mach[i]**2)
+			T_aw[i] = self.t * (1 + r*(self.gamma - 1)/2 * mach[i]**2) / (1 + (self.gamma - 1)/2 * mach[i]**2)
 		
 		return T_aw
 
@@ -88,7 +82,8 @@ class FilmCooling():
 		sigma = self.coolant.SurfaceTension(T=self.coolant.T) * 0.0685217810		# conversion to [lbf/ft]
 		Xe = delta*(rho/32.174)**0.5 * u_e * (self.cea.T_static/self.T_if)**0.25 / sigma
 		Xr = Xe * sigma
-				
+		
+		#from Liquid Rocket Engine Self-Cooled Combustion Chambers NASA 1977
 		Xe_list = np.array([0,2,4,6,8,10,12,14,16,18,20])*1e4
 		A_list = [0,0.1,0.2,0.3,0.38,0.45,0.5,0.56,0.6,0.66,0.7]
 		par_list = [1,1.6,2.2,3.1,4,4.5,5,5.5,6,6.5,7]
@@ -106,7 +101,7 @@ class FilmCooling():
 
 		return L 		
 
-	def nasa_liquid_film(self, x_bar, phi_r=0.025,phase='l'):
+	def nasa_liquid_film(self, x_bar, phi_r=0.025):
 
 		film_massflow = self.film_massflow / 0.4536			# comversion to [lbm/s]
 		massflow = self.massflow / 0.4536					# comversion to [lbm/s]
@@ -122,9 +117,6 @@ class FilmCooling():
 		eta = (theta*(1 + We_Wc*np.sqrt(1- We_L/(massflow-film_massflow)) - (phi_r*x_bar/self.ri)**2))**(-1)
 
 		Cpv = self.coolant.Cpl
-		if phase == 'g':
-			Cpv = self.coolant.Cpg
-
 		h_total = self.cea.Cp*self.cea.T_static
 		h_e = self.cea.Cp*self.T_local
 		h_aw = h_total - eta*(h_total - self.coolant.H) - (1-self.cea.Pr**(1/3))*(h_total - h_e)
@@ -174,10 +166,10 @@ class FilmCooling():
 
 		return T_aw
 
-	def T_aw(self, film_start, film_end, mach, T_aw_uncooled, n_holes):
+	def T_aw(self, film_start, film_end, mach, T_aw_uncooled, n_holes, chamber_pressure):
 		"""[summary]
 		:param film_start: start index in 'geometry' of the film cooling
-		:param film_end: expected index in 'geometry' of the film cooling
+		:param film_end: expected index in 'geometry' of the film cooling for local geomoetry refinement 
 		:param geometry: chamber geometry
 		"""	
 		geom_refinement = 10
@@ -190,11 +182,11 @@ class FilmCooling():
 		x = fl.x_bar(rx,start,dx,throat_idx)
 		x_bar_arr = x.compute(start,end,start)
 
-		liq_inj = inj.LiquidInjector(['c2h5oh', 'h2o'], [0.9,0.1], 350, 60e5, 0.6e-3, self.film_massflow/n_holes, 10e5, np.pi/6)
+		pressure_drop = self.coolant.P - chamber_pressure
+		liq_inj = inj.LiquidInjector(['c2h5oh', 'h2o'], [0.9,0.1], self.coolant.T, self.coolant.P, 0.6e-3, self.film_massflow/n_holes, pressure_drop, np.pi/6)
 		liq_inj.injector()
 		self.local_conditions(mach[0])
 		L = self.liquid_lenght()
-		print(L)
 
 		points = np.arange(film_start, film_end, 1)
 		T_aw_arr = np.ndarray(len(points))
@@ -203,7 +195,6 @@ class FilmCooling():
 			i = p - film_start	
 			self.local_conditions(mach[p])
 			if self.geometry[i,0] > L:
-				#self.coolant = thermo.Chemical('C2H5OH', P=60e5, T=515)
 				T_aw_arr[i] = T_aw_cooled[p]
 			else: 
 				T_aw_arr[i] = self.nasa_liquid_film(x_bar_arr[i*geom_refinement])
@@ -221,7 +212,7 @@ if __name__ == "__main__":
 	ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[90,10])
 	geometry = np.genfromtxt('sparrow_50bar.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
 	massflow = 5.8
-	film_massflow = 0.2
+	film_massflow = 0.5
 	chamber_pressure = 50e5
 	mach = 0.2
 	radius_at_injection = 60e-3
@@ -234,12 +225,12 @@ if __name__ == "__main__":
 
 	coolant = thermo.Chemical('C2H5OH', P=60e5, T=350)
 
-	film = FilmCooling(coolant, cea, massflow, film_massflow, chamber_pressure, radius_at_injection, geometry)
+	film = FilmCooling(coolant, cea, massflow, film_massflow, chamber_pressure, geometry[42,1], geometry)
 	#film.local_conditions(mach)
 	#print(film.liquid_lenght())
 	#print(film.nasa_liquid_film(0.3))
 	#print(film.nasa_gaseous_film(0.2,10,0.4e-3))
-	T_aw_cooled = film.T_aw(40,70,mach,T_aw_uncooled,40)
+	T_aw_cooled = film.T_aw(42, 70, mach,T_aw_uncooled, 40, chamber_pressure)
 
 	f, axes = plt.subplots(4, 1)
 	axes[0].plot(geometry[:,0], geometry[:,1]*1000)
