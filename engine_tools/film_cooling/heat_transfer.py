@@ -196,7 +196,7 @@ class Heattransfer():
 			halpha = 0.026 * G**0.8/(self.throat_diameter)**0.2 * mu**0.2*cp/Pr**0.6 * (self.cea.T_static/T_f)**0.68
 
 		elif self.method == 'cinjarew':
-			eta_combustion = 0.95
+			eta_combustion = 0.92
 			T_hg = T_local + 0.8*(self.cea.T_static*eta_combustion**2 - T_local)
 			halpha = 0.01975 * self.cea.k**0.18*(self.massflow*cp)**0.82 / (2*y_coordinate)**1.82 * (T_hg/wall_temperature)**0.35
 
@@ -229,12 +229,12 @@ class Heattransfer():
 	def radiation(self, y_coordinate, mach):
 		T_local = self.cea.T_static/(1 + (self.cea.gamma-1)/2 * mach**2)
 		P_local = self.chamber_pressure/((1 + (self.cea.gamma-1)/2 * mach**2)**(self.cea.gamma/(self.cea.gamma-1)))
-		p_co2 = self.cea.mole_fractions[1]['*CO2'][0] * P_local
+		#p_co2 = self.cea.mole_fractions[1]['*CO2'][0] * P_local
 		p_h2o = self.cea.mole_fractions[1]['H2O'][0] * P_local
-		q_r_co2 = 4 * (p_co2/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
+		#q_r_co2 = 4 * (p_co2/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
 		q_r_h2o = 5.74 * (p_h2o/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
 
-		return q_r_co2 + q_r_h2o
+		return q_r_h2o
 
 	def heat_trans_coeff_coolant(self, wall_temperature, coolant_wall_temperature, x_coordinate, y_coordinate, section_length, section_number):
 		d_h = self.cooling_geometry.dhi_arr[section_number]
@@ -248,6 +248,13 @@ class Heattransfer():
 		wall_fluid = thermo.Mixture(self.coolant_species, ws=self.coolant_massfraction, P=self.coolant.P, T=coolant_wall_temperature)
 		Nu = 0.0208*Re**0.8*Pr**0.4*(1+0.01457*wall_fluid.mu/self.coolant.mu)  #Hess & Kunz relationship
 		halpha = Nu * k / d_h
+
+		
+		#halpha = 0.023*self.coolant.Cp**0.333*k**0.667 / (self.coolant.mu**0.467*d_h**0.2) * (self.coolant_massflow/(np.pi/4 * d_h**2))**0.8  # McAdams
+		#halpha = 0.023*k/d_h * (self.coolant.Cp / (k*self.coolant.mu))**0.4 * (self.coolant_massflow*d_h/A)**0.8
+		#Nu = halpha / k * d_h
+
+	
 
 		return halpha, Re, Nu, flowvelocity
 

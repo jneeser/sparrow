@@ -183,7 +183,7 @@ class FilmCooling():
 		x_bar_arr = x.compute(start,end,start)
 
 		pressure_drop = self.coolant.P - chamber_pressure
-		liq_inj = inj.LiquidInjector(['c2h5oh', 'h2o'], [0.9,0.1], self.coolant.T, self.coolant.P, 0.6e-3, self.film_massflow/n_holes, pressure_drop, np.pi/6)
+		liq_inj = inj.LiquidInjector(['c2h5oh', 'h2o'], [0.8,0.2], self.coolant.T, self.coolant.P, 0.6e-3, self.film_massflow/n_holes, pressure_drop, np.pi/6)
 		liq_inj.injector()
 		self.local_conditions(mach[0])
 		L = self.liquid_lenght()
