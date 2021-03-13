@@ -1,9 +1,10 @@
 import numpy as np
-import engine_tools as et
 import thermo
 import rocketcea
 from matplotlib import pyplot as plt
 import csv
+
+import heat_transfer as ht
 
 data = np.genfromtxt('optimised_geometry_50bar.csv', delimiter=',', dtype=None, skip_header = 1)
 geometry = np.genfromtxt('sparrow_50bar.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
@@ -36,8 +37,7 @@ fuel_composition = ['C2H5OH']
 fuel_mass_fraction = [1]
 
 
-heat = et.Heattransfer(fuel_composition, fuel_mass_fraction, fuel_massflow, total_massflow, ethanol90, oxidiser, OF, chamber_pressure, fuel_temperature, fuel_inlet_pressure, geometry, number_of_channels, thermal_conductivity, method, thermal_conductivity_tbc, wall_thickness_tbc)
-#heat = et.Heattransfer(['CH4'], [1], 1.32, 5.5, 'CH4', 'LOX', 3.16, 40e5, 110, 60e5, geometry, wall_thickness, thermal_conductivity)
+heat = ht.Heattransfer(fuel_composition, fuel_mass_fraction, fuel_massflow, total_massflow, ethanol90, oxidiser, OF, chamber_pressure, fuel_temperature, fuel_inlet_pressure, geometry, number_of_channels, thermal_conductivity, method, thermal_conductivity_tbc, wall_thickness_tbc)
 
 heat.heatflux(channel_hydraulic_diameter, geometry, wall_thickness, 1250, False)
 

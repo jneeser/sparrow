@@ -34,6 +34,7 @@ class Pintle():
 		beta = 2.0
 		self.spray_angle = alpha * np.arctan(beta * self.lmr)
 
+
 	def pintle_optimiser(self, tmr_range):
 		"""
 		optimises pressure drops to get within given TMR range

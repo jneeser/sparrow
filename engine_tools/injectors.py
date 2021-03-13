@@ -98,25 +98,27 @@ class GasInjector():
 
 class AnnularOrifice():
     """
-    DO NOT USE
+    annulus volume flow based on Poiseuille Flow
     """
-    def __init__(self, fluid, mixture, temperature, pressure, length, pressuredrop, inner_radius, outer_radius):
+    def __init__(self, fluid, mixture, temperature, pressure, length, pressuredrop, massflow, r_inner):
         self.fluid = thermo.Mixture(fluid, ws=mixture, T=temperature, P=pressure)
         self.length = length
         self.pressuredrop = pressuredrop
-        self.inner_radius = inner_radius
-        self.outer_radius = outer_radius
-
+        self.r_inner = r_inner
+        self.massflow = massflow
+   
     def injector(self):
-        '''
-        from https://www.mathworks.com/help/physmod/hydro/ref/annularorifice.html#bqvdf1z-1
-        '''
-        m = np.pi*self.outer_radius*(self.outer_radius - self.inner_radius)**3 / (6*self.fluid.rho*self.fluid.nu*self.length) * self.pressuredrop
-        A = np.pi*(self.outer_radius**2 - self.inner_radius**2)
-        mu = m / (A * np.sqrt(2*self.fluid.rho*self.pressuredrop))
+        Q = self.massflow / self.fluid.rho
+        G = self.pressuredrop / self.length
 
-        self.mu = mu
-        self.massflow = m
+        func = lambda r_outer: G*np.pi / (8*self.fluid.mu) * (r_outer**4 - self.r_inner**4 - (r_outer**2 - self.r_inner**2)**2/np.log(r_outer/self.r_inner)) - Q
+        r_outer = fsolve(func, 1)
+        #diameter = (Q*6*self.fluid.mu*self.length / (np.pi*radius*self.pressuredrop*5/2))**(1/3)
+        self.diameter = r_outer - self.r_inner
+
+        A = np.pi*(r_outer**2 - self.r_inner**2)
+        self.mu = self.massflow / (A * np.sqrt(2*self.fluid.rho*self.pressuredrop))
+        self.velocity = self.massflow / self.fluid.rho / A
 
 
 class AnnulusInjector():
@@ -176,10 +178,10 @@ class AnnulusInjector():
         self.velocity = vel
 
 
-def annulus_verification(inner_radius, outer_radius, fluid, pressure_range, temperature, discharge_coefficient):
+def annulus_verification(r_inner, outer_radius, fluid, pressure_range, temperature, discharge_coefficient):
     volumeflow = []
-    D = 2*((outer_radius - inner_radius)/2 + inner_radius)
-    di = outer_radius - inner_radius
+    D = 2*((outer_radius - r_inner)/2 + r_inner)
+    di = outer_radius - r_inner
     for p in pressure_range:
         liquid = thermo.Chemical(fluid, T=temperature, P=p)
         vel = discharge_coefficient*np.sqrt(2*p/liquid.rho)
@@ -235,26 +237,38 @@ if __name__ == '__main__':
 
     liq_inj = LiquidInjector(['o2'], [1], 90, 50e5+dp, 2e-3, 3.5858/n_holes, dp, np.pi/2)
     liq_inj.injector()
-    print(liq_inj.velocity)
+    #print(liq_inj.velocity)
     #print(liq_inj.diameter*1000)
 
     gas_inj = GasInjector('o2', 288, 26e5, 4e-3, 0.163/4, 6e5, 20e-3, np.pi/2)
     gas_inj.injector()
     #print(gas_inj.mu)
 
-    an_inj = AnnulusInjector(['c2h5oh','h2o'], [0.9,0.1], 450, 62.5e5, 2e-3, 30e-3, 2.227, 16.65e5)
+    an_inj = AnnulusInjector(['c2h5oh','h2o'], [0.9,0.1], 410, 62.5e5, 2e-3, 30e-3, 2.227, 13.3e5)
     an_inj.injector()
     print(an_inj.mu)
     print(an_inj.diameter*1000)
     print(an_inj.velocity)
 
-    print((liq_inj.velocity*liq_inj.massflow*n_holes)/(an_inj.velocity*an_inj.massflow))
+
+    an_orifice = AnnularOrifice(['c2h5oh','h2o'], [0.9,0.1], 410, 62.5e5, 2e-3, 13.3e5, 2.227, 30e-3/2)
+    an_orifice.injector()
+    print(an_orifice.mu)
+    print(an_orifice.diameter*1000)
+    print(an_orifice.velocity)
+
+    #print((liq_inj.velocity*liq_inj.massflow*n_holes)/(an_inj.velocity*an_inj.massflow))
 
     mass_fraction = [0.9,0.1]
     mole_fraction = [46/64, 18/64]
     n_holes = np.arange(20,100,1)
     massflow = 3.5858
 
+    print(thermo.Mixture(['c2h5oh', 'h2o'], [0.8,0.2], T=288.15, P=1e5).rho)
+    print(thermo.Mixture(['c2h5oh', 'h2o'], [0.8,0.2], T=288.15, P=70e5).rho)
+
+    print(thermo.Chemical('o2', T=90, P=1e5).rho)
+
     #ohnesorge_number(liq_inj, n_holes, massflow, mass_fraction, mole_fraction)
 
-    annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)
+    #annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)

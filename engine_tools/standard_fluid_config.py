@@ -6,30 +6,28 @@ import rocketcea
 
 #chamber parameters
 chamber_pressure = 50e5 			# [Pa]
-fuel_inlet_pressure = 75e5			# [Pa]
+fuel_inlet_pressure = 70e5			# [Pa]
 fuel_temperature = 288				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 7.93
 pre_injection_pressure = 1.2*chamber_pressure	# [Pa]
-fuel_injection_temperature = 453 	# [K]
+fuel_injection_temperature = 410 	# [K]
 chamber_diameter = 130e-3			# [m]
-throat_diameter = 49.72e-3			# [m]
+throat_diameter = 49.7e-3			# [m]
 
 # CEA input values 
-OF = 1.61		# 0.97 for injector face		
+OF = 1.49		# 0.97 for injector face		
 oxidiser = 'LOX'
-ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[90,10])  # new fule blend for CEA
+ethanol90 = rocketcea.blends.newFuelBlend(fuelL=['C2H5OH', 'H2O'], fuelPcentL=[80,20])  # new fule blend for CEA
  
 
 # Thermo input values 
-total_massflow = 5.813 
+total_massflow = 5.8   #5.813 for 50 bar
 fuel_massflow = total_massflow / (1+OF)
 ox_massflow = total_massflow - fuel_massflow
 fuel_composition = ['C2H5OH', 'H2O']
-fuel_mass_fraction = [0.9, 0.1]
+fuel_mass_fraction = [0.8, 0.2]
 ox_composition = 'O2'
-
-
 
 # Hot gas properties
 # can choose beteen 'chamber'. 'throat' and 'exit' for cea.metric_cea_output
@@ -47,7 +45,8 @@ if __name__ == "__main__":
 	print('gas Prandtl number: ', cea.Pr, '[-]')
 	print('ratio of specific heats: ', cea.gamma, '[-]')
 	print('gas thermal conductivity: ', cea.k, '[W/m/K]')
-	#print('gas mole fractions: ', cea.mole_fractions)
+	print('gas CP: ', cea.Cp, '[J/kg/K]')
+	print('gas mollecular weight: ', cea.MW, '[g/mol]')
 
 	print('fuel density: ', liquid_fuel.rho, '[kg/m^3]')
 	print('fuel dynamic visconsity', liquid_fuel.mu, '[Pa s]')
