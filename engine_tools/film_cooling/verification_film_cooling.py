@@ -7,6 +7,8 @@ import csv
 import heat_transfer as ht
 import geom_class as gc
 import NASA_film_model as film
+import film_model as fm
+
 
 geometry = np.genfromtxt('trotti_contour.txt', delimiter='', dtype=None, skip_header = 13) / 1000 					# conversion to [m]
 t = 2e-3
@@ -32,30 +34,37 @@ expansion_ratio = 1.5
 # CEA input values 
 OF = 2.88	
 oxidiser = 'GOX'
-fuel = 'Kerosene'
+fuel = 'JetA'
 cea = ht.CEA(fuel, oxidiser, chamber_pressure)
 cea.metric_cea_output('chamber', OF, expansion_ratio)
 
 # Thermo input values 
 total_massflow = 0.4964					# [kg/s]
-fuel_massflow = 0.9
-fuel_composition = ['H2O']
-fuel_mass_fraction = [1]
+fuel_massflow = total_massflow / (1+OF)
+coolant_massflow = 0.498#1.96
+coolant_composition = ['H2O']
+coolant_mass_fraction = [1]
 
 # Film Cooling BETA
+
 mu = 0.05
-film_massflow = mu*total_massflow
+film_massflow = fuel_massflow * mu / (1-mu)
 isnetropic = film.Isentropic(chamber_pressure, cea.T_static, cea.gamma)
 mach = isnetropic.mach(geometry)[::-1]
 T_aw_uncooled = isnetropic.adiabatic_wall_temp(mach, geometry, cea.Pr)
-coolant = thermo.Chemical('C2H5OH', P=chamber_pressure+10e5, T=288)
+coolant = thermo.Mixture(['benzine'], ws=[1], P=chamber_pressure+10e5, T=273)
 film = film.FilmCooling(coolant, cea, total_massflow, film_massflow, chamber_pressure, geometry[49,1], geometry)
-T_aw_cooled = film.T_aw(film_start=49, film_end=80, mach=mach, T_aw_uncooled=T_aw_uncooled, n_holes=number_of_channels, chamber_pressure=chamber_pressure)[::-1]
+T_aw_cooled = film.T_aw(film_start=49, film_end=100, mach=mach, T_aw_uncooled=T_aw_uncooled, n_holes=number_of_channels, chamber_pressure=chamber_pressure)[::-1]
 
 
-heat = ht.Heattransfer(fuel_composition, fuel_mass_fraction, fuel_massflow, total_massflow, fuel, oxidiser, OF, chamber_pressure, fuel_temperature, fuel_inlet_pressure, geometry, cooling_channels, thermal_conductivity, method, T_aw_cooled)
-
+heat = ht.Heattransfer(coolant_composition, coolant_mass_fraction, coolant_massflow, total_massflow, fuel, oxidiser, OF, chamber_pressure, fuel_temperature, fuel_inlet_pressure, geometry, cooling_channels, thermal_conductivity, method, T_aw_cooled)
 heat.heatflux(geometry)
+
+coolant_velocity = 30
+film_start_idx = 49
+film = fm.FilmCooling(coolant, cea, total_massflow, chamber_pressure, coolant_velocity)
+film.film_effectiveness(film_start_idx, heat.section_length[::-1], heat.mach[::-1], heat.q[::-1], heat.q_rad[::-1], film_massflow, geometry)
+#heat.heatflux(geometry, film.eta_arr[::-1], film_start_idx)
 
 plt.rcParams.update({'font.size': 12})
 f, axes = plt.subplots(4, 1)
@@ -74,15 +83,8 @@ axes[3].set_ylabel('adiabatic wall temperature [K]')
 plt.xlabel('x coordiante [m]')
 plt.show()
 
-print(max(heat.wall_temp))
+#print(max(heat.wall_temp))
 
-''' 
-with open('heat_transfer_coefficients.csv', 'w', newline='') as file:
-	writer = csv.writer(file)
-	writer.writerow(["x coordinate","y_coordinate","gas heat transfer coefficient"])
-	for i in range(len(geometry[:,1])):
-		writer.writerow([geometry[i,0], geometry[i,1], heat.halpha_gas[len(geometry[:,1]) - i - 1]])
-'''
 idx1 = np.where(np.logical_and(geometry[:,0][::-1] >= 0.015, geometry[:,0][::-1] <= 0.11))[0]
 idx2 = np.where(np.logical_and(geometry[:,0][::-1] >= 0.11, geometry[:,0][::-1] <= 0.205))[0]
 idx3 = np.where(np.logical_and(geometry[:,0][::-1] >= 0.215, geometry[:,0][::-1] <= 0.4))[0]
@@ -93,23 +95,23 @@ avg_sec2 = np.average(heat.q[idx2])
 avg_sec3 = np.average(heat.q[idx3])
 avg_sec4 = np.average(heat.q[idx4])
 
-exp_sec1 = 1.089e7
+exp_sec1 = 1.289e7
 exp_sec2 = 1.495e7
 exp_sec3 = 9.139e6
-exp_sec4 = 1.659e7
+exp_sec4 = 1.561e7
 
 inv_geometry = geometry[:,0][::-1]
 plt.plot(geometry[:,0][::-1], heat.q/1e6, color='black', label='total heat flux')
 #plt.plot(geometry[:,0][::-1], heat.halpha_gas*(heat.t_aw-heat.wall_temp)/1e6, label='convective heat flux')
 #plt.plot(geometry[:,0][::-1], heat.q_rad/1e6, label='radiation')
-plt.plot(inv_geometry[idx1], np.ones(len(idx1))*exp_sec1/1e6, linestyle='dashed', color='red', label='experimental heat fluxes')
-plt.plot(inv_geometry[idx2], np.ones(len(idx2))*exp_sec2/1e6, linestyle='dashed', color='red')
-plt.plot(inv_geometry[idx3], np.ones(len(idx3))*exp_sec3/1e6, linestyle='dashed', color='red')
-plt.plot(inv_geometry[idx4], np.ones(len(idx4))*exp_sec4/1e6, linestyle='dashed', color='red')
-plt.plot(inv_geometry[idx1], np.ones(len(idx1))*avg_sec1/1e6, color='blue', label='section averaged heat fluxes')
-plt.plot(inv_geometry[idx2], np.ones(len(idx2))*avg_sec2/1e6, color='blue')
-plt.plot(inv_geometry[idx3], np.ones(len(idx3))*avg_sec3/1e6, color='blue')
-plt.plot(inv_geometry[idx4], np.ones(len(idx4))*avg_sec4/1e6, color='blue')
+#plt.plot(inv_geometry[idx1], np.ones(len(idx1))*exp_sec1/1e6, linestyle='dashed', color='red')
+#plt.plot(inv_geometry[idx2], np.ones(len(idx2))*exp_sec2/1e6, linestyle='dashed', color='red')
+plt.plot(inv_geometry[idx3], np.ones(len(idx3))*exp_sec3/1e6, linestyle='dashed', color='red', label='experimental heat fluxes')
+#plt.plot(inv_geometry[idx4], np.ones(len(idx4))*exp_sec4/1e6, linestyle='dashed', color='red')
+#plt.plot(inv_geometry[idx1], np.ones(len(idx1))*avg_sec1/1e6, color='blue')
+#plt.plot(inv_geometry[idx2], np.ones(len(idx2))*avg_sec2/1e6, color='blue')
+plt.plot(inv_geometry[idx3], np.ones(len(idx3))*avg_sec3/1e6, color='blue', label='section averaged heat fluxes')
+#plt.plot(inv_geometry[idx4], np.ones(len(idx4))*avg_sec4/1e6, color='blue')
 plt.grid()
 plt.xlabel('x coordinate [m]')
 plt.ylabel('heat flux [MW/m^2]')
@@ -122,7 +124,7 @@ e1 = (avg_sec1 - exp_sec1) / exp_sec1 * 100
 e2 = (avg_sec2 - exp_sec2) / exp_sec2 * 100
 e3 = (avg_sec3 - exp_sec3) / exp_sec3 * 100
 e4 = (avg_sec4 - exp_sec4) / exp_sec4 * 100
-print(e1)
-print(e2)
+#print(e1)
+#print(e2)
 print(e3)
-print(e4)
+#print(e4)

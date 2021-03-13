@@ -1,0 +1,10 @@
+coolant massflow 5.973 lbm/s		2.709
+t wall 0.013 in				0.0003302
+dc 5.13 in				0.130302			
+dt 2.47					0.062738
+ae/at 61
+pc 480 psia				33.0948
+of 5.26
+massflow 37.36 lbm/s			17.068681
+cstar 98.92
+180 tubes

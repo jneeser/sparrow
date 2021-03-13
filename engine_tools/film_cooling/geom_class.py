@@ -121,7 +121,6 @@ class parameters:
             self.dho_arr[i] = self.dho
             self.Ai_arr[i] = self.channeli.A
             self.Ao_arr[i] = self.channelo.A
-            print(self.dhi)
 
 
 class metal:
@@ -233,11 +232,11 @@ def geomo(x):
 
 
 if __name__ == '__main__':
-    t = 2.2e-3
-    wt1 = 0.6e-3
+    t = 2.4e-3
+    wt1 = 0.55e-3
     wt2 = 0.6e-3
     rf1 = 0.3e-3
-    rf2 = 0.3e-3
+    rf2 = 0.4e-3
     test = parameters(ri=60e-3,t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=42)
     test.local_channel_geometry()
     print(test.dhi)
@@ -255,8 +254,8 @@ if __name__ == '__main__':
     T2_in718 = [293,588.7,810.9,922,977.6,1033.2,1088.7]
     in718 = metal(E=(E_in718,T1_in718),k=24,v=0.29,alpha=12e-6,sig_yield=(sig_in718, T2_in718))
 
-    test = parameters(ri=25e-3,t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=36)
-    heat = sim(wall_temp=1010, q=13.2e6, p_cool=72e5, p_chamber=28e5)
+    test = parameters(ri=25e-3,t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=42)
+    heat = sim(wall_temp=923, q=18e6*1.1, p_cool=72e5, p_chamber=28e5)
     struct = structural(test, in718, heat)
     struct.geom_update()
     struct.stress()

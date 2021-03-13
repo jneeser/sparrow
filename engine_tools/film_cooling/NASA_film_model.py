@@ -6,7 +6,6 @@ import rocketcea
 
 from heat_transfer import CEA
 import film_length as fl
-import injectors as inj
 
 
 class Isentropic():
@@ -52,7 +51,7 @@ class Isentropic():
 
 class FilmCooling():
 	def __init__(self, coolant, cea, massflow, film_massflow, chamber_pressure, radius_at_injection, geometry):
-		self.coolant = coolant 
+		self.coolant = coolant
 		self.cea = cea
 		self.massflow = massflow
 		self.film_massflow = film_massflow
@@ -66,7 +65,8 @@ class FilmCooling():
 		self.P_local = self.chamber_pressure/((1 + (self.cea.gamma-1)/2 * mach**2)**(self.cea.gamma/(self.cea.gamma-1)))
 		self.rho_local = self.P_local / (8314.472/self.cea.MW * self.cea.T_static)
 		self.T_if = self.coolant.Tc
-		self.B = self.cea.Cp*(self.cea.T_static - self.T_if) / (self.coolant.Hvap_Tb - self.coolant.H)
+		self.Hvap = thermo.phase_change.Clapeyron(self.coolant.T, self.coolant.Tc, self.coolant.Pc) * self.coolant.MW 
+		self.B = self.cea.Cp*(self.cea.T_static - self.T_if) / (self.Hvap - self.coolant.H)
 	
 	def liquid_lenght(self):
 		
@@ -79,7 +79,7 @@ class FilmCooling():
 		film_massflow = self.film_massflow / 0.4536			# comversion to [lbm/s]
 		rho = self.rho_local * 0.06242796					# conversion to [lbm/ft^3]
 		
-		sigma = self.coolant.SurfaceTension(T=self.coolant.T) * 0.0685217810		# conversion to [lbf/ft]
+		sigma = self.coolant.SurfaceTensionMixture(T=self.coolant.T,P=self.coolant.P,zs=self.coolant.zs,ws=self.coolant.ws) * 0.0685217810		# conversion to [lbf/ft]
 		Xe = delta*(rho/32.174)**0.5 * u_e * (self.cea.T_static/self.T_if)**0.25 / sigma
 		Xr = Xe * sigma
 		
@@ -115,12 +115,13 @@ class FilmCooling():
 			theta = 0.758
 
 		eta = (theta*(1 + We_Wc*np.sqrt(1- We_L/(massflow-film_massflow)) - (phi_r*x_bar/self.ri)**2))**(-1)
+		print(eta)
 
 		Cpv = self.coolant.Cpl
 		h_total = self.cea.Cp*self.cea.T_static
 		h_e = self.cea.Cp*self.T_local
 		h_aw = h_total - eta*(h_total - self.coolant.H) - (1-self.cea.Pr**(1/3))*(h_total - h_e)
-		h_c_sv = self.coolant.Hvap_Tb
+		h_c_sv = thermo.phase_change.Clapeyron(self.coolant.T, self.coolant.Tc, self.coolant.Pc) * self.coolant.MW
 		T_aw = (h_aw - eta*h_c_sv + eta*Cpv*self.T_if + (1-eta)*(self.cea.Cp*self.cea.T_static - h_e)) / (eta*Cpv + (1-eta)*self.cea.Cp)
 
 		return T_aw
@@ -160,7 +161,6 @@ class FilmCooling():
 		We_Wc = (self.massflow - self.film_massflow)/self.film_massflow * (2*psi_r*x_bar/(self.ri - d_injector) - (psi_r*x_bar/(self.ri - d_injector))**2)
 		
 		eta = eta_film(We_Wc)
-		#print(eta)
 		delta_h = self.cea.Cp * (self.cea.T_static - self.T_local)
 		T_aw = self.cea.T_static - (eta*self.coolant.Cpg*(self.cea.T_static-self.coolant.T) + (1-self.cea.Pr**(1/3))*delta_h) / (eta*self.coolant.Cpg + (1-eta)*self.cea.Cp)
 
@@ -182,20 +182,21 @@ class FilmCooling():
 		x = fl.x_bar(rx,start,dx,throat_idx)
 		x_bar_arr = x.compute(start,end,start)
 
-		pressure_drop = self.coolant.P - chamber_pressure
-		liq_inj = inj.LiquidInjector(['c2h5oh', 'h2o'], [0.8,0.2], self.coolant.T, self.coolant.P, 0.6e-3, self.film_massflow/n_holes, pressure_drop, np.pi/6)
-		liq_inj.injector()
 		self.local_conditions(mach[0])
 		L = self.liquid_lenght()
-
+		
 		points = np.arange(film_start, film_end, 1)
 		T_aw_arr = np.ndarray(len(points))
 		T_aw_cooled = T_aw_uncooled.copy()
+
 		for p in points:
 			i = p - film_start	
 			self.local_conditions(mach[p])
+			print(mach[p])
+
 			if self.geometry[i,0] > L:
-				T_aw_arr[i] = T_aw_cooled[p]
+				#self.coolant = thermo.Mixture(['benzine'], [1], T=self.coolant.Tc+10, P=self.chamber_pressure+10e5)
+				T_aw_arr[i] = T_aw_uncooled[i]#self.nasa_gaseous_film(x_bar_arr[i*geom_refinement], 40, 0.4e-3)
 			else: 
 				T_aw_arr[i] = self.nasa_liquid_film(x_bar_arr[i*geom_refinement])
 
@@ -219,18 +220,20 @@ if __name__ == "__main__":
 
 	cea = CEA(ethanol90, oxidiser, chamber_pressure)
 	cea.metric_cea_output('throat', OF, 12)
+	
 	isnetropic = Isentropic(chamber_pressure, cea.T_static, cea.gamma)
 	mach = isnetropic.mach(geometry)[::-1]
 	T_aw_uncooled = isnetropic.adiabatic_wall_temp(mach, geometry, cea.Pr)
 
-	coolant = thermo.Chemical('C2H5OH', P=60e5, T=350)
+	coolant = thermo.Mixture(['benzine'], ws=[1], P=60e5, T=350)
 
 	film = FilmCooling(coolant, cea, massflow, film_massflow, chamber_pressure, geometry[42,1], geometry)
-	#film.local_conditions(mach)
+	film.local_conditions(mach)
 	#print(film.liquid_lenght())
 	#print(film.nasa_liquid_film(0.3))
 	#print(film.nasa_gaseous_film(0.2,10,0.4e-3))
-	T_aw_cooled = film.T_aw(42, 70, mach,T_aw_uncooled, 40, chamber_pressure)
+	
+	T_aw_cooled = film.T_aw(42, 100, mach,T_aw_uncooled, 40, chamber_pressure)
 
 	f, axes = plt.subplots(4, 1)
 	axes[0].plot(geometry[:,0], geometry[:,1]*1000)
@@ -247,3 +250,4 @@ if __name__ == "__main__":
 
 	plt.xlabel('x coordiante [m]')
 	plt.show()
+	

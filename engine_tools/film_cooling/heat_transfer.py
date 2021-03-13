@@ -229,36 +229,34 @@ class Heattransfer():
 	def radiation(self, y_coordinate, mach):
 		T_local = self.cea.T_static/(1 + (self.cea.gamma-1)/2 * mach**2)
 		P_local = self.chamber_pressure/((1 + (self.cea.gamma-1)/2 * mach**2)**(self.cea.gamma/(self.cea.gamma-1)))
-		#p_co2 = self.cea.mole_fractions[1]['*CO2'][0] * P_local
+		p_co2 = self.cea.mole_fractions[1]['*CO2'][0] * P_local
 		p_h2o = self.cea.mole_fractions[1]['H2O'][0] * P_local
-		#q_r_co2 = 4 * (p_co2/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
+		q_r_co2 = 4 * (p_co2/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
 		q_r_h2o = 5.74 * (p_h2o/1e5*y_coordinate)**0.3 * (T_local/100)**3.5
 
-		return q_r_h2o
+		return q_r_h2o + q_r_co2
 
 	def heat_trans_coeff_coolant(self, wall_temperature, coolant_wall_temperature, x_coordinate, y_coordinate, section_length, section_number):
 		d_h = self.cooling_geometry.dhi_arr[section_number]
 		A = self.cooling_geometry.Ai_arr[section_number]
 		
 		flowvelocity = self.coolant_massflow/(self.coolant.rho * A * 2 * self.cooling_geometry.N)
-		Pr = self.coolant.Pr
+		Pr = 0.75 + 1.63/np.log(1+self.coolant.Pr/0.0015) 			# turbulent Pr correction
+
 		Re = self.coolant.rho*flowvelocity*d_h/self.coolant.mu
 		k = self.coolant.Cp*self.coolant.mu/Pr
 
 		wall_fluid = thermo.Mixture(self.coolant_species, ws=self.coolant_massfraction, P=self.coolant.P, T=coolant_wall_temperature)
 		Nu = 0.0208*Re**0.8*Pr**0.4*(1+0.01457*wall_fluid.mu/self.coolant.mu)  #Hess & Kunz relationship
 		halpha = Nu * k / d_h
-
 		
 		#halpha = 0.023*self.coolant.Cp**0.333*k**0.667 / (self.coolant.mu**0.467*d_h**0.2) * (self.coolant_massflow/(np.pi/4 * d_h**2))**0.8  # McAdams
 		#halpha = 0.023*k/d_h * (self.coolant.Cp / (k*self.coolant.mu))**0.4 * (self.coolant_massflow*d_h/A)**0.8
 		#Nu = halpha / k * d_h
 
-	
-
 		return halpha, Re, Nu, flowvelocity
 
-	def iterator(self, y_coordinate, x_coordinate, section_length, section_number, initial_guess, mach, t_aw ,max_iter=1000, tol=1e-6):
+	def iterator(self, y_coordinate, x_coordinate, section_length, section_number, initial_guess, mach, t_aw ,eta=1, max_iter=1000, tol=1e-6):
 		wall_temperature = 300
 		coolant_wall_temperature = 300
 		wall_thickness = self.cooling_geometry.wt1_arr[section_number]
@@ -266,7 +264,7 @@ class Heattransfer():
 		difference = 1
 
 		while difference > tol:
-			halpha = self.heat_trans_coeff_gas(mach, wall_temperature, t_aw, y_coordinate)
+			halpha = self.heat_trans_coeff_gas(mach, wall_temperature, t_aw, y_coordinate) * eta						# film cooling correction
 			halpha_c, Re, Nu, flowvelocity = self.heat_trans_coeff_coolant(wall_temperature, coolant_wall_temperature, x_coordinate, y_coordinate, section_length, section_number)
 			radiation = self.radiation(y_coordinate, mach)
 
@@ -286,9 +284,9 @@ class Heattransfer():
 		dp = self.pressure_drop(6e-6, section_length, section_number, y_coordinate)
 		self.coolant.calculate(P=self.coolant.P-dp, T=T_new)
 
-		return heat_flux, wall_temperature, Re, Nu, flowvelocity, radiation, halpha
+		return heat_flux, wall_temperature, Re, Nu, flowvelocity, radiation, halpha, halpha_c
 
-	def heatflux(self, geometry):
+	def heatflux(self, geometry, eta_film=1, x_film_injection=0):
 		"""
 		OUTPUTS (at each chamber location):
 		mach: 							local mach number 
@@ -320,6 +318,8 @@ class Heattransfer():
 		self.P_chamber = np.ndarray(len(y))
 		self.halpha_gas = np.ndarray(len(y))
 		self.flowvelocity = np.ndarray(len(y))
+		self.section_length = np.ndarray(len(y))
+		self.halpha_coolant = np.ndarray(len(y))
 
 		# initial guess for mach-area relation
 		initial_guess = np.ndarray(len(y))					
@@ -331,7 +331,6 @@ class Heattransfer():
 
 		local = Isentropic(self.chamber_pressure, self.cea.T_static, self.cea.gamma)
 
-		# Iterate over each chamber lcoation starting at exit
 		for i in range(len(y)):
 			if i == 0:
 				section_length = 0
@@ -341,16 +340,21 @@ class Heattransfer():
 			local_area = np.pi*y[i]**2
 			mach = local.mach(local_area, np.pi*self.throat_diameter**2/4, initial_guess[i])
 			t_aw = self.adiabatic_wall_temp(mach, initial_guess[i])
+			eta = 1
 
 			if type(self.T_aw_cooled) != int:
 				t_aw = self.T_aw_cooled[i]
-			
+
+			if type(eta_film) != int:
+				eta = eta_film[i]
+
 			self.mach[i] = mach
 			self.t_aw[i] = t_aw
 			self.P_chamber[i] = local.pressure(mach)
 			self.T_chamber[i] = local.temperature(mach)
+			self.section_length[i] = section_length
 		
-			q, wall_temp, Re, Nu, flowvelocity, radiation, halpha = self.iterator(y[i], x[i], section_length, i, initial_guess[i], mach, t_aw)
+			q, wall_temp, Re, Nu, flowvelocity, radiation, halpha, halpha_c = self.iterator(y[i], x[i], section_length, i, initial_guess[i], mach, t_aw, eta)
 
 			self.q[i] = q  
 			self.q_rad[i] = radiation
@@ -361,6 +365,7 @@ class Heattransfer():
 			self.coolant_Nu[i] = Nu
 			self.halpha_gas[i] = halpha
 			self.flowvelocity[i] = flowvelocity
+			self.halpha_coolant[i] = halpha_c
 
 
 

@@ -16,7 +16,7 @@ rf2 = 0.2e-3
 number_of_channels = 90
 cooling_channels = gc.parameters(ri=130e-3,t=t,wt1=wt1,wt2=wt2,rf1=rf1,rf2=rf2,N=number_of_channels)
 #cooling_channels.cooling_geometry(geometry[:,1][::-1])
-cooling_channels.dhi_arr = np.ones(len(geometry[:,1]))*2.7e-3
+cooling_channels.dhi_arr = np.ones(len(geometry[:,1]))*2.6e-3
 cooling_channels.wt1_arr = np.ones(len(geometry[:,1]))*0.33e-3
 cooling_channels.Ai_arr = cooling_channels.dhi_arr**2*np.pi/4
 
@@ -26,7 +26,7 @@ method = 'cinjarew'
 
 # global properties
 chamber_pressure = 33.09e5 			# [Pa]
-fuel_inlet_pressure = 110e5			# [Pa]
+fuel_inlet_pressure = 130e5			# [Pa]
 fuel_temperature = 64				# [K]
 ox_temperature = 90 				# [K]
 expansion_ratio = 61
