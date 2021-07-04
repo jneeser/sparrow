@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+from scipy.interpolate import interp1d
 import thermo
 from matplotlib import pyplot as plt
 import rocketcea
@@ -60,12 +61,15 @@ class FilmCooling():
 		self.geometry = geometry
 
 	def local_conditions(self, mach):
+		self.Tb = sum([self.coolant.Tbs[i]*self.coolant.ws[i] for i in range(len(self.coolant.ws))])
+		self.Tc = sum([self.coolant.Tcs[i]*self.coolant.ws[i] for i in range(len(self.coolant.ws))])
+		self.Pc = sum([self.coolant.Pcs[i]*self.coolant.ws[i] for i in range(len(self.coolant.ws))])
+		self.T_if = self.Tc
 		self.u_e = mach*np.sqrt(self.cea.gamma*8314.472/self.cea.MW*self.cea.T_static)
 		self.T_local = self.cea.T_static/(1 + (self.cea.gamma-1)/2 * mach**2)
 		self.P_local = self.chamber_pressure/((1 + (self.cea.gamma-1)/2 * mach**2)**(self.cea.gamma/(self.cea.gamma-1)))
 		self.rho_local = self.P_local / (8314.472/self.cea.MW * self.cea.T_static)
-		self.T_if = self.coolant.Tc
-		self.Hvap = thermo.phase_change.Clapeyron(self.coolant.T, self.coolant.Tc, self.coolant.Pc) * self.coolant.MW 
+		self.Hvap = thermo.phase_change.Clapeyron(self.coolant.T, self.Tc, self.Pc) * self.coolant.MW 
 		self.B = self.cea.Cp*(self.cea.T_static - self.T_if) / (self.Hvap - self.coolant.H)
 	
 	def liquid_lenght(self):
@@ -87,8 +91,8 @@ class FilmCooling():
 		Xe_list = np.array([0,2,4,6,8,10,12,14,16,18,20])*1e4
 		A_list = [0,0.1,0.2,0.3,0.38,0.45,0.5,0.56,0.6,0.66,0.7]
 		par_list = [1,1.6,2.2,3.1,4,4.5,5,5.5,6,6.5,7]
-		A_interp = sp.interpolate.interp1d(Xe_list,A_list,fill_value='extrapolate')
-		par_interp = sp.interpolate.interp1d(Xe_list,par_list,fill_value='extrapolate')
+		A_interp = interp1d(Xe_list,A_list,fill_value='extrapolate')
+		par_interp = interp1d(Xe_list,par_list,fill_value='extrapolate')
 		A = A_interp(Xe)			
 		par = par_interp(Xe)
 		a = par*(1+3*Xr**(-0.8))
@@ -117,11 +121,11 @@ class FilmCooling():
 		eta = (theta*(1 + We_Wc*np.sqrt(1- We_L/(massflow-film_massflow)) - (phi_r*x_bar/self.ri)**2))**(-1)
 		print(eta)
 
-		Cpv = self.coolant.Cpl
+		Cpv = self.coolant.Cpg
 		h_total = self.cea.Cp*self.cea.T_static
 		h_e = self.cea.Cp*self.T_local
 		h_aw = h_total - eta*(h_total - self.coolant.H) - (1-self.cea.Pr**(1/3))*(h_total - h_e)
-		h_c_sv = thermo.phase_change.Clapeyron(self.coolant.T, self.coolant.Tc, self.coolant.Pc) * self.coolant.MW
+		h_c_sv = self.Hvap
 		T_aw = (h_aw - eta*h_c_sv + eta*Cpv*self.T_if + (1-eta)*(self.cea.Cp*self.cea.T_static - h_e)) / (eta*Cpv + (1-eta)*self.cea.Cp)
 
 		return T_aw
@@ -138,7 +142,7 @@ class FilmCooling():
 			else: 
 				f_list = [1,1.07,1.1,1.1,1.07,1.04,0.97,0.9,0.85,0.8,0.75,0.6,0.55,0.5,0.45]
 				uc_ue_list = [1,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2,3,4,5,10]
-				f_interp = sp.interpolate.interp1d(uc_ue_list,f_list,fill_value='extrapolate')
+				f_interp = interp1d(uc_ue_list,f_list,fill_value='extrapolate')
 				f = f_interp(uc_ue)
 			return f
 
@@ -149,7 +153,7 @@ class FilmCooling():
 			elif We_Wc > 0.06: 
 				We_Wc_list = [0.06,0.2,0.4,0.8,1.2,1.4]
 				eta_list = [1,0.9,0.8,0.7,0.6,0.55]
-				eta_interp = sp.interpolate.interp1d(We_Wc_list,eta_list,fill_value='extrapolate')
+				eta_interp = interp1d(We_Wc_list,eta_list,fill_value='extrapolate')
 				eta = eta_interp(We_Wc)
 			else:
 				eta = 1
@@ -225,7 +229,7 @@ if __name__ == "__main__":
 	mach = isnetropic.mach(geometry)[::-1]
 	T_aw_uncooled = isnetropic.adiabatic_wall_temp(mach, geometry, cea.Pr)
 
-	coolant = thermo.Mixture(['benzine'], ws=[1], P=60e5, T=350)
+	coolant = thermo.Mixture(['C2H5OH','H2O'], ws=[0.9,0.1], P=60e5, T=350)
 
 	film = FilmCooling(coolant, cea, massflow, film_massflow, chamber_pressure, geometry[42,1], geometry)
 	film.local_conditions(mach)

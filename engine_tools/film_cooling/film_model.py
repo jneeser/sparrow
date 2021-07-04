@@ -5,7 +5,6 @@ from matplotlib import pyplot as plt
 import rocketcea
 
 from heat_transfer import CEA
-import injectors as inj
 
 
 class FilmCooling():
@@ -24,8 +23,11 @@ class FilmCooling():
 
 	def liquid_film_cooling(self, chamber_radius, q_conv, q_rad, film_massflow):
 		Tb = sum([self.coolant.Tbs[i]*self.coolant.ws[i] for i in range(len(self.coolant.ws))])
-		hfg = thermo.phase_change.Clapeyron(self.coolant.T, self.coolant.Tc, self.coolant.Pc) * self.coolant.MW 		# conversion to J/kg
-		hfg = hfg + (self.coolant.Tc - self.coolant.T) * self.coolant.Cpl
+		Tc = sum([self.coolant.Tcs[i]*self.coolant.ws[i] for i in range(len(self.coolant.ws))])
+		Pc = sum([self.coolant.Pcs[i]*self.coolant.ws[i] for i in range(len(self.coolant.ws))])
+		hfg = thermo.phase_change.Clapeyron(self.coolant.T, Tc, Pc) * self.coolant.MW 		# conversion to J/kg
+
+		hfg = hfg + (Tc - self.coolant.T) * self.coolant.Cpg
 		mv = (q_conv+q_rad) / hfg
 
 		Gmean = self.rho_local*self.ue * (self.ue - self.coolant_velocity)/self.ue
@@ -40,7 +42,7 @@ class FilmCooling():
 		F = mv / Gmean
 		Mg_Mc = self.cea.MW / self.coolant.MW
 
-		F_St0 = self.cea.Cp/hfg * (self.T_local - self.coolant.Tc + q_rad/h0)
+		F_St0 = self.cea.Cp/hfg * (self.T_local - Tc + q_rad/h0)
 		St_St0 = np.log(1 + F_St0 * (Mg_Mc)**0.6) / (F_St0 * (Mg_Mc)**0.6)
 
 		self.eta = St_St0
@@ -48,7 +50,7 @@ class FilmCooling():
 		self.mv = mv
 
 
-	def film_effectiveness(self, film_start, section_length, mach, q_conv, q_rad, film_massflow, geometry):
+	def film_effectiveness(self, film_start, section_length, mach, q_conv, q_rad, film_massflow, y):
 		"""[summary]
 
 		:param film_start: 		start index of film cooling on chamber geometry
@@ -59,8 +61,7 @@ class FilmCooling():
 		:param film_massflow:	initial coolant mass flow 
 		"""	
 
-		self.eta_arr = np.ndarray(len(geometry[:,1]))
-		y = geometry[:,1]
+		self.eta_arr = np.ndarray(len(y))
 
 		for i in range(len(y)):
 			self.local_conditions(mach[i])
@@ -69,11 +70,12 @@ class FilmCooling():
 			elif i >= film_start:
 				self.liquid_film_cooling(y[i], q_conv[i], q_rad[i], film_massflow)
 				self.eta_arr[i] = self.eta
-				film_massflow -= self.mv * 2*np.pi*y[i] * section_length[i]
-				print(self.film_length*1000)
-				print(q_conv[i]/1e6)
+				film_massflow -= self.mv * 2*np.pi*y[i] * section_length[i] 
+
 			else:
 				self.eta_arr[i] = 1	
+
+			print(self.eta_arr[i])
 
 
 if __name__ == "__main__":
@@ -109,8 +111,8 @@ if __name__ == "__main__":
 	y = np.ones(100)*0.065
 	x = np.arange(0,1,0.01)
 
-	#film.film_effectiveness(50, section_length, mach, q_conv, q_rad, film_massflow, y)
+	film.film_effectiveness(50, section_length, mach, q_conv, q_rad, film_massflow, y)
 
 
-	#plt.plot(x, film.eta_arr)
-	#plt.show()
+	plt.plot(x, film.eta_arr)
+	plt.show()

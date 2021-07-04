@@ -7,6 +7,7 @@ AUTHOR: Jonthan Neeser
 DATE: 13.12.2020
 '''
 
+from matplotlib.pyplot import table
 import numpy as np
 import thermo
 import scipy.optimize 
@@ -109,6 +110,7 @@ class CEA():
 		self.chamber_pressure = chamber_pressure
 		self.imperial_pressure = 0.000145038*self.chamber_pressure 			#conversion to psia
 		self.ispObj = CEA_Obj( oxName=oxidiser, fuelName=fuel)
+		self.ispObj.get_full_cea_output()
 
 	def chamber_gas_properties(self, mixture_ratio, expansion_ratio):
 		self.Cp, self.visc, self.cond, self.Pr = self.ispObj.get_Chamber_Transport(Pc=self.imperial_pressure, MR=mixture_ratio, frozen=1)
@@ -239,15 +241,25 @@ class Heattransfer():
 	def heat_trans_coeff_coolant(self, wall_temperature, coolant_wall_temperature, x_coordinate, y_coordinate, section_length, section_number):
 		d_h = self.cooling_geometry.dhi_arr[section_number]
 		A = self.cooling_geometry.Ai_arr[section_number]
-		
 		flowvelocity = self.coolant_massflow/(self.coolant.rho * A * 2 * self.cooling_geometry.N)
-		Pr = 0.75 + 1.63/np.log(1+self.coolant.Pr/0.0015) 			# turbulent Pr correction
 
-		Re = self.coolant.rho*flowvelocity*d_h/self.coolant.mu
-		k = self.coolant.Cp*self.coolant.mu/Pr
+		if self.coolant.phase == 'l':
+			Pr = self.coolant.Prl
+			Cp = self.coolant.Cpl
+			mu = self.coolant.mul
+
+		if self.coolant.phase == 'g':
+			Pr = self.coolant.Prg
+			Cp = self.coolant.Cpg
+			mu = self.coolant.mug
+		
+		Pr = 0.75 + 1.63/np.log(1+Pr/0.0015) 			# turbulent Pr correction
+
+		Re = self.coolant.rho*flowvelocity*d_h/mu
+		k = Cp*mu/Pr
 
 		wall_fluid = thermo.Mixture(self.coolant_species, ws=self.coolant_massfraction, P=self.coolant.P, T=coolant_wall_temperature)
-		Nu = 0.0208*Re**0.8*Pr**0.4*(1+0.01457*wall_fluid.mu/self.coolant.mu)  #Hess & Kunz relationship
+		Nu = 0.0208*Re**0.8*Pr**0.4*(1+0.01457*wall_fluid.mug/mu)  #Hess & Kunz relationship
 		halpha = Nu * k / d_h
 		
 		#halpha = 0.023*self.coolant.Cp**0.333*k**0.667 / (self.coolant.mu**0.467*d_h**0.2) * (self.coolant_massflow/(np.pi/4 * d_h**2))**0.8  # McAdams
@@ -280,9 +292,11 @@ class Heattransfer():
 			wall_temperature = new_wall_temp
 			coolant_wall_temperature = -heat_flux*wall_thickness/self.thermal_conductivity + new_wall_temp
 
-		T_new = self.coolant.T + heat_flux*2*np.pi*y_coordinate*section_length / (self.coolant_massflow*self.coolant.Cp) 
+		T_new = self.coolant.T + heat_flux*2*np.pi*y_coordinate*section_length / (self.coolant_massflow*self.coolant.Cp)
 		dp = self.pressure_drop(6e-6, section_length, section_number, y_coordinate)
-		self.coolant.calculate(P=self.coolant.P-dp, T=T_new)
+		self.coolant = thermo.Mixture(self.coolant_species, ws=self.coolant_massfraction, T=T_new, P=self.coolant.P-dp)
+		print(section_number)
+		print(self.coolant.T)
 
 		return heat_flux, wall_temperature, Re, Nu, flowvelocity, radiation, halpha, halpha_c
 
@@ -334,6 +348,7 @@ class Heattransfer():
 		for i in range(len(y)):
 			if i == 0:
 				section_length = 0
+
 			else:
 				section_length = np.sqrt((x[i] - x[i-1])**2 + (y[i]-y[i-1])**2)
 
@@ -342,9 +357,11 @@ class Heattransfer():
 			t_aw = self.adiabatic_wall_temp(mach, initial_guess[i])
 			eta = 1
 
+			# for film cooling model with altered adiabatic wall temperature
 			if type(self.T_aw_cooled) != int:
 				t_aw = self.T_aw_cooled[i]
-
+			
+			# for film cooling model with film coling efficiency
 			if type(eta_film) != int:
 				eta = eta_film[i]
 
@@ -366,7 +383,3 @@ class Heattransfer():
 			self.halpha_gas[i] = halpha
 			self.flowvelocity[i] = flowvelocity
 			self.halpha_coolant[i] = halpha_c
-
-
-
-	
