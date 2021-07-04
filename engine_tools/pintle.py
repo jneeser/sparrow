@@ -86,7 +86,7 @@ class Pintle():
 		print(np.max(np.degrees(spray_angles)))
 
 		x,y = np.meshgrid(ox_pressure_range,fuel_pressure_range)
-
+		
 		fig, ax = plt.subplots()
 		ax.set_title('spray angles [deg]')
 		c = ax.pcolormesh(x/1e6, y/1e6, np.degrees(spray_angles))
@@ -110,22 +110,22 @@ class Pintle():
 		fig.colorbar(c)
 
 		plt.show()
-
+		
 
 #Injector Parameters 
 pressuredrop = std.pre_injection_pressure - std.chamber_pressure 		# [Pa]
 inlet_angle = np.pi/2
 
-n_holes = 36
+n_holes = 48
 l_hole = 2.75e-3							# [m]
 annulus_length = 2e-3 						# [m]
 d_pintle = 30e-3							# [m]
 
 liq_inj = injectors.LiquidInjector(['o2'], [1], std.ox_temperature, std.pre_injection_pressure, l_hole, std.ox_massflow/n_holes, pressuredrop, inlet_angle)
-an_inj = injectors.AnnulusInjector(['c2h5oh', 'h2o'], [0.9,0.1], std.fuel_injection_temperature, std.pre_injection_pressure, annulus_length, d_pintle, std.fuel_massflow, pressuredrop)
+an_inj = injectors.AnnulusInjector(['c2h5oh', 'h2o'], [0.8,0.2], std.fuel_injection_temperature, std.pre_injection_pressure, annulus_length, d_pintle, std.fuel_massflow, pressuredrop)
 
 # Pintle optimisation 
-tmr_range = [0.9,1.1]
+tmr_range = [0.9,0.95]
 pintle = Pintle(liq_inj, an_inj, n_holes)
 pintle.pintle_optimiser(tmr_range)
 print('pintle injector TMR:', pintle.tmr)
@@ -135,7 +135,17 @@ print('fuel pressure drop: ',pintle.fuel_injector.pressuredrop/1e6, '[MPa]')
 print('oxidiser hole diameter:', pintle.oxidiser_injector.diameter*1000, '[mm]')
 print('annulus width:', pintle.fuel_injector.diameter*1000, '[mm]')
 
+
 # pintle spray angle sensitivity 
-pintle.pintle_sensitivity()
+# pintle.pintle_sensitivity()
 
 
+# Battleship injector Parameters 
+liq_inj = injectors.LiquidInjector(['o2'], [1], std.ox_temperature, std.pre_injection_pressure, l_hole, std.ox_massflow/n_holes, pressuredrop, inlet_angle)
+an_inj = injectors.AnnulusInjector(['c2h5oh', 'h2o'], [0.8,0.2], 288, std.pre_injection_pressure, annulus_length, d_pintle, std.fuel_massflow, 13e5)
+pintle = Pintle(liq_inj, an_inj, n_holes)
+pintle.momentum_ratio()
+print('pintle injector TMR:', pintle.tmr)
+print('pintle injector spray cone half angle:', np.degrees(pintle.spray_angle))
+print('oxidiser hole diameter:', pintle.oxidiser_injector.diameter*1000, '[mm]')
+print('annulus width:', pintle.fuel_injector.diameter*1000, '[mm]')

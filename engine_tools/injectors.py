@@ -17,7 +17,7 @@ class LiquidInjector():
         return 3.55378*np.exp(-Re*0.647016) - 0.103358
 
     def xiinlet(self):
-        return 0.5 + 1.2/np.pi*self.inletangle         # min 0.5 for coaxial flow before injection, max 0.9 for flow at pi/6 rad realtive to faceplate 
+        return 0.5 + 2.5/np.pi*self.inletangle         # min 0.5 for coaxial flow before injection, max 0.9 for flow at pi/6 rad realtive to faceplate. orignially 0.5 + 1.2/np.pi*self.inletangle 
     
     def injector(self, maxiter=100, tol=1e-6):
         it = 0 
@@ -145,7 +145,7 @@ class AnnulusInjector():
 
     def xiinlet(self):
         #return 0.5 + 1.2/np.pi*self.inletangle             # min 0.5 for coaxial flow before injection, max 0.9 for flow at pi/6 rad realtive to faceplate 
-        return 1.359                                        # fit from cryo test data 
+        return 1.662                                        # fit from cryo test data
 
     def injector(self, maxiter=100, tol=1e-6):
         it = 0 
@@ -201,6 +201,10 @@ def annulus_verification(r_inner, outer_radius, fluid, pressure_range, temperatu
     exp_volumeflow = experimental_volumeflow(pressure_range)
     error = np.dot((exp_volumeflow-volumeflow), (exp_volumeflow-volumeflow))/np.dot(exp_volumeflow,exp_volumeflow)
     print('error: ', abs(error))
+
+    idx = np.where(pressure_range == 12e5)
+    e = exp_volumeflow[idx] - volumeflow[idx]
+    print(e)
     
     plt.plot(experimental_volumeflow(pressure_range), pressure_range/1e5, color = 'red', label = 'experimental volumeflow')
     plt.plot(volumeflow, pressure_range/1e5, color = 'blue', label = 'calculated volumeflow')
@@ -240,8 +244,8 @@ if __name__ == '__main__':
     #print(liq_inj.velocity)
     #print(liq_inj.diameter*1000)
 
-    gas_inj = GasInjector('o2', 288, 26e5, 4e-3, 0.163/4, 6e5, 20e-3, np.pi/2)
-    gas_inj.injector()
+    #gas_inj = GasInjector('o2', 288, 26e5, 4e-3, 0.163/4, 6e5, 20e-3, np.pi/2)
+    #gas_inj.injector()
     #print(gas_inj.mu)
 
     an_inj = AnnulusInjector(['c2h5oh','h2o'], [0.9,0.1], 410, 62.5e5, 2e-3, 30e-3, 2.227, 13.3e5)
@@ -259,16 +263,11 @@ if __name__ == '__main__':
 
     #print((liq_inj.velocity*liq_inj.massflow*n_holes)/(an_inj.velocity*an_inj.massflow))
 
-    mass_fraction = [0.9,0.1]
-    mole_fraction = [46/64, 18/64]
-    n_holes = np.arange(20,100,1)
-    massflow = 3.5858
-
-    print(thermo.Mixture(['c2h5oh', 'h2o'], [0.8,0.2], T=288.15, P=1e5).rho)
-    print(thermo.Mixture(['c2h5oh', 'h2o'], [0.8,0.2], T=288.15, P=70e5).rho)
-
-    print(thermo.Chemical('o2', T=90, P=1e5).rho)
-
     #ohnesorge_number(liq_inj, n_holes, massflow, mass_fraction, mole_fraction)
 
-    #annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 288, 0.61)
+    # annulus verification
+    an_orifice = AnnulusInjector(['H2O'], [1], 293, 70e5, 2e-3, 30e-3, 2.33, 12e5)
+    an_orifice.injector()
+    cd = an_orifice.mu
+    print(cd)
+    annulus_verification(24.2e-3/2, 25.32e-3/2, 'h2o', np.arange(1e5, 15e5, 0.1e5), 293, cd)
